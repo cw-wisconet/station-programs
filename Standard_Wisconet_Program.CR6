@@ -62,12 +62,12 @@ Const LWET = 280                                    'LWET:      Leaf wetness - c
 Const MAIN_SCAN = 3                                 'MAIN_SCAN: Primary Scan Rate, in seconds (e.g. 3)...    used for main program and most sensors
 Const SUB_SCAN1 = 5                                 'SUB_SCAN1: SlowSequence #1 Scan Rate, in seconds (e.g. 5)... used for slower sensors; used to improve "skipped scans"
 Const SUB_SCAN2 = 60                                'SUB_SCAN2: SlowSequence #2 Scan Rate, in seconds (e.g. 60)... used for slower sensors; used to improve "skipped scans"
-Const SUB_SCAN3 = 30                               'SUB_SCAN3: SlowSequence #2 Scan Rate, in seconds (e.g. 300)... used for slower sensors; used to improve "skipped scans"
+Const SUB_SCAN3 = 300                               'SUB_SCAN3: SlowSequence #2 Scan Rate, in seconds (e.g. 300)... used for slower sensors; used to improve "skipped scans"
 '
 '
 ''Send data through to NM10 IP address using FTPClient
 '
-Const IPAddress="0.0.0.0"
+Const IPAddress="wisconet" + CHR(45) + "agg.ad.wisc.edu"
 Const UserName="ABC"
 Const Password="123"
 '
@@ -77,7 +77,6 @@ Const Password="123"
 Public CurrentTime(9)                       'Date/Time Info from Logger
 Public Battery_V                            'Logger Battery Voltage
 Public PanelTemp_C                          'Logger Wiring Panel Temperature
-Public ModuleState As Boolean
 '
 Public AirTemp_C                            'HMP-155a Air Temperature
 Public RelHum                               'HMP-155a Relative Humidity
@@ -108,8 +107,10 @@ Public SubScan2_Count                       'Test Counter For SubScan #2
 Public SubScan3_Count                       'Test Counter For SubScan #3
 '
 Public FTPResult                            'Status of FTP file transfer
-'Public HTTPResponse
-'Public http_header_content As String * 100
+Public PingResultGoog
+Public PingResultFTP
+Public MigrateNetwork As Boolean = False
+Public RevertNetwork As Boolean = False
 '
 ' Maintenance Mode Variables - developed by S. Marquie
 '
@@ -400,21 +401,12 @@ BeginProg
       VarDisabled = False
     EndIf
     
-
-    '----------------------------------------------
-    'Power cycle CELL210
-    '----------------------------------------------
-    'Between the hours of 4:00 and 23:00, turn the CELL200 series on
-    'If TimeIsBetween(4,23,24,Hr) Then
-     ' ModuleState=True
-      'IPNetPower(5,1)
-    'Else
-    ModuleState=True
-    If ModuleState=False
-      IPNetPower(5,0)
-    EndIf
-    
-    
+    '----------------
+    'PING test'
+    '---------------------
+   PingResultGoog = PingIP ("8.8.8.8",200)
+   PingResultFTP = PingIP (IPAddress, 200)
+   
   NextScan
   '
   '---------------------------------------------
@@ -450,7 +442,7 @@ BeginProg
   '---
   '---
   SlowSequence
-  Scan(SUB_SCAN1, Sec, 3, 0)
+  Scan(SUB_SCAN2, Sec, 3, 0)
 
     SubScan2_Count = SubScan2_Count + 1
 
@@ -493,12 +485,19 @@ BeginProg
     'deleted (12 is the file format option; 1000 indicates static file name;
     'negating value means do not write header with each write of new data)
     '
-    FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & CurrentTime(1)& CurrentTime(2)& CurrentTime(3)& CurrentTime(4)& CurrentTime(5)& ".csv",20,0,5,Min,-1012)
-   
-  NextScan
+    If (MigrateNetwork = True) Then 
+        SetSetting("PakBusTCPClients(1)",""",6785")  
+        SetSetting("CellAPN","uwmadwis5g.vzwentp"                                                                                      
+      EndIf
+    If (RevertNetwork = True) Then
+       SetSetting("PakBusTCPClients(1)","harlak.konectgds.com,8190")  
+       SetSetting("CellAPN","vzwinternet")                                                                                      
+      EndIf
+      
     
-    'http_header_content = "Content-Type:application/json"
-    'HTTPPost ("https://dev.wisconet.wisc.edu/station_update.php","Table5",HTTPResponse,http_header_content,0,5,Min,32)
+    FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & CurrentTime(1)& CurrentTime(2)& CurrentTime(3)& CurrentTime(4)& CurrentTime(5)& ".csv",20,-1,0,Min,12)
+
+  NextScan
   '
   '
 EndProg
