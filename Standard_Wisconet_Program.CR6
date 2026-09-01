@@ -1,172 +1,134 @@
-'CR6 Series Datalogger
-'program name:    WiscNetTest-abbad.cr6             (maintenance mode version)
-'program author:   Steven A. Marquie
-'edits: Caitlin Wienkes [cmw]
-'date:             OCT 23 2023
+'Program Name:     TEST-5a.cr6
+'Program Author:   Caitlin Wienkes
+'Acknowledgements: based on code provided by Steve Marquie; see previous versions for detailed notes
+'Date:             January 2025
 '
-'info:             data logger program ID code: [stid]-[1][2][3][4][5].[prg]: where:
-'                     [stid]...station id:         [mar]   (marshfield)
-'                        [1]...state               [a]     (a=WI)
-'                        [2]...soil                [a]     (a=CS650, b=CS655)
-'                        [3]...air temp/rh         [a]     (a=HygroVue10, b=HMP-155a)
-'                        [4]...site type           [a]     (a=3m,    b=10m, c=1.5m)
-'                        [5]...extra sensors       [d]     (a=none, b= canopy lws, c=100cm soil, d=canopy lws & 100cm soil)
-'                      [prg]...suffix/logger type  [cr6]   (cr6=CR6)
+'Info:             data logger program ID code: [stid]-[1][2].[prg]: where:
+'                        [stid]...station id:         [XXXX]
+'                        [1]...# of Soil sensors      [#]    (5=full suite, 4=5,10,20,50 cm, 3=5,10,20cm...)
+'                        [2]...LWS_canopy             [x]    (a=no, b=yes)
+'                        [prg]...suffix/logger type  [cr6]   (cr6=CR6)
 '
+''version 0.4_2024
 '
-'logger program:   alt-aaad.cr6                    (mar / WI /CS650 / HygroVue10 / 3m / canopy lws & 100cm soil extra sensors)
-'version 3A_2023
-'extra sensors:    LWS Canopy and 100 cm soil
-'
-'comments:
+'Comments:         Use this program to transition cell modems to new network. Includes code to backfill data when cell signal fails
 '                  SDI-12 Instructions based on sample code provided by CSI (B. Banham)
 '                  Program assumes modem is powered-on continuously
-'                  Canopy Leaf Wetness should be in use... if not, please use alternate program to mask data as "NAN"
 '
-'       Line 600:  Program makes use of "SlowSequence" to correct issues with "skipped scans"... 05-second scan for Air Temperature and Solar Radiation
-'       Line 678:  Program makes use of "SlowSequence" to correct issues with "skipped scans"... 60-second scan for Soil Sensors
-'
-'       Line 110:  Set "LW_Canopy_mV" variable to "NAN"... used within output to "Public" table
-'       Line 111:  Set "LW_Canopy_mV_Avg" variable to "NAN"... used within output to "Table05" table
-'       Line 112   Set "LW_Canopy_mV_Hst" variable to "NAN"... used within output to "Table60" table
-'       Line 505:  Disable canopy leaf wetness code
-'
-'       Line 560:  Maintenance Mode Checks  (do not process Data Tables if MaintMode is set to "true")
-'
-'       Line 090:  LWET set to 280          (Leaf wetness wet/dry cutoff set to 280mv)
-'       Line 091:  MAIN_SCAN set to 3       (Primary Program Scan Rate set to 3-seconds)
-'       Line 092:  SUB_SCAN1 set to 5       (SlowSequence Scan Rate of 05-seconds... used for Solar Radiation)
-'       Line 093:  SUB_SCAN2 set to 60      (SlowSequence Scan Rate of 60-seconds... used for Soil Sensors)
-'
-'       Line 080:  MMWIN set to 3600        (Maximum Maintenance Window Set to 3600 seconds [one hour])
-'       Line 081:  SNUM set to 11011        (Station 011 of "WI" EnviroWX Network)
-'       Line 264 thru 348: Expanded Five Min Table to include all standard parameters
-'       Line 569: Added HMPP-155a Air Temp / RH Sensor to main scan according to Vaisala manual. Added necessary Aliases and updated tables
-'       Line 319: Added Wind Gust (Maximum Wind Speed for 3 sec scan over 5 minutes) cmw
 '------------------------------------------------------------------------------------------------------------------------------------------
 '
 '------------------------------------------------------------------------------------------------------------------------------------------
 'Wiring Diagram:
 '
-'CR6      HMP155a                           CR6        CS320
-' G       Red                               G          Black
-' AGND    Green                             G          Blue
-' U7      White                             G          Clear
-' U8      Yellow                            C1         White (data)
-' 12V     Blue                              12V        Red
+'CR6     HMP155a                               CR6        LI200R-SMV
+'  G       Red                                   U9          Black
+'  AGND    Green                                 U10         Red
+'  G       Black   (Shield)
+'  U7      Yellow  (Relative Humidity Signal)
+'  U8      White   (Temperature Signal)
+'  12V     Blue
+' Wires not used: Pink, Brown, and Grey
+' Separate G and AGND
 '
-'CR6      LWS_A                             CR6        LWS_B
-' U1       White (VEx)                       U1         White (VEx)    [N/A]
-' U2       Red (Signal)                      U3         Red (Signal)   [N/A]
-' G        Bare (Gnd)                        G          Bare (Gnd)     [N/A]
+'CR6      LWS_Standard                         CR6        LWS_Canoppy (Door and Kewaunee Stations)
+'  U1       Brown  (VEx)                         U1         White (VEx)
+'  U2       Orange (Signal)                      U3         Red   (Signal)
+'  G        Clear  (Gnd)                         G          Clear
 '
-'CR6      CS655s                            CR6        03002
-' G        Black (Gnd)                       G          Black (Gnd)
-' G        Clear (Shield)                    G          Clear (Shield)
-' G        Orange                            G          White
-' C3       Green (data)                      U1         Blue (VEx)
-' 12V      Red                               U4         Green (Direction Signal)
-'                                            U6         Red (Speed Signal)
-'CR6       TE525
-' G         White (Gnd)
-' U5        Black (Signal)
-' G         Clear (Shield)
+'CR6      CS655                                CR6        03002
+'  G        Black                                G          Black
+'  G        Clear (Shield)                       G          Clear   (Shield)
+'  C3       Green (Signal)                       G          White
+'  12V      Red                                  U1         Blue    (VEx)
+'  Wire not used: Orange                         U4         Green   (Direction Signal)
+'                                                U6         Red     (Speed Signal)
 '
-'CR6    BaroVUE                              
-'  G        Black (Gnd)     
-'  C1       White  (data)
-'  +12V     Red   (Power)      '
+'CR6      TE525                                CR6        BaroVUE
+'  G        White                                G          Black
+'  U5       Black (Signal)                       C1         White  (Signal)
+'  G        Clear (Shield)                       12V        Red
+'
+'
 '------------------------------------------------------------------------------------------------------------------------------------------
 'Declare Constants:
 '
-'   The following are station-specific:
+'   The following are station-specific variables:
 '
-'      MMWIN: maximum maintenance window    (maximum maintenance window [in seconds])
-'      SNUM: station nummber [aabbb]        (aa: 10=Michigan, 11=Wisconsin, bbb=station id number)
-'
-Const MMWIN = 3600                          'Maximum Maintenance Windows (in seconds) [3600 = one hour]
-Const SNUM = 11011
-Const ELEV = 315
+Const ELEV = 315                                    'ELEV: Station Elevation - Used to convert station pressure to sea level pressure
 '
 '   The following are program constants and should not be modified
 '
-'      LWET:      leaf wetness - cutoff between wet/dry (e.g. 280 mV)
-'      MAIN_SCAN: Primary Scan Rate, in seconds (e.g. 3)...    used for main program and most sensors
-'      SUB_SCAN1: SlowSequence #1 Scan Rate, in seconds (e.g. 5)... used for solar radiation
-'      SUB_SCAN2: SlowSequence #2 Scan Rate, in seconds (e.g. 60)... used for slower sensors; used to improve "skipped scans"
+Const MMWIN = 3600                                  'MMWIN:     Maximum Maintenance Window (in seconds) [3600 = one hour]
+Const LWET = 280                                    'LWET:      Leaf wetness - cutoff between wet/dry (e.g. 280 mV)
+Const MAIN_SCAN = 3                                 'MAIN_SCAN: Primary Scan Rate, in seconds (e.g. 3)...    used for main program and most sensors
+Const SUB_SCAN1 = 5                                 'SUB_SCAN1: SlowSequence #1 Scan Rate, in seconds (e.g. 5)... used for slower sensors; used to improve "skipped scans"
+Const SUB_SCAN2 = 60                                'SUB_SCAN2: SlowSequence #2 Scan Rate, in seconds (e.g. 60)... used for slower sensors; used to improve "skipped scans"
+Const SUB_SCAN3 = 300                               'SUB_SCAN3: SlowSequence #2 Scan Rate, in seconds (e.g. 300)... used for slower sensors; used to improve "skipped scans"
 '
-Const LWET = 280
-Const MAIN_SCAN = 3
-Const SUB_SCAN1 = 5
-Const SUB_SCAN2 = 60
 '
-'------------------------------------------------------------------------------------------------------------------------------------------
+''Send data through to NM10 IP address using FTPClient. Both Username and Password are station specific.
+'
+Const IPAddress="wisconet" + CHR(45) + "agg.ad.wisc.edu"
+Const UserName="WN_ABCD"
+Const Password="123"
+'
+''------------------------------------------------------------------------------------------------------------------------------------------
 'Declare Variables and Units
 '
-'Dim AirDewDif                               'Value used to store the difference between air temperature and dewpoint
-Dim Htr                                     'CS320 Heater
-'
-Public BattV                                'Reference voltage for BaroVUE
-Public PTemp_C                              'Reference temperature for BaroVUE
-Public BaroVUE(3)                           'BaroVUE barometric pressure sensor (enclosure mounted)
-Public Battery_V                            'Logger Battery Voltage
-Public CS320_1(6)                           'CS320 Digital Thermopile Pyranometer (2-m)                      [SDI-12 sensor address "1"]
-Public CS320_1_HtrCtrl As Boolean           'CS320 Heater Control Flag
-Public CS650_0(6)                           'CS650 Water Content Reflectometer / Soil Temperature (05-cm)    [SDI-12 sensor address "0"]
-Public CS650_1(6)                           'CS650 Water Content Reflectometer / Soil Temperature (10-cm)    [SDI-12 sensor address "1"]
-Public CS650_2(6)                           'CS650 Water Content Reflectometer / Soil Temperature (20-cm)    [SDI-12 sensor address "2"]
-Public CS650_3(6)                           'CS650 Water Content Reflectometer / Soil Temperature (50-cm)    [SDI-12 sensor address "3"]
-Public CS650_4(6)                           'CS650 Water Content Reflectometer / Soil Temperature (100-cm)   [SDI-12 sensor address "4"]
 Public CurrentTime(9)                       'Date/Time Info from Logger
-Public AirTC                                 'HMP-155a Air Temperature 2.0m)
-Public RH                                    'HMP-155a Rel Humidity
-'Public LW_Canopy_mV 
-Public LW_Standard_mV                       'Leaf Wetness (LWS-L): Standard Mount
-'Public LWMCon_Canopy                       'Leaf Wetness (LWS-L): Canopy (Minutes Sensor = Contaminated or Wet)
-'Public LWMCon_Standard                     'Leaf Wetness (LWS-L): Standard (Minutes Sensor = Contaminated or Wet)
-'Public LWMDry_Canopy                       'Leaf Wetness (LWS-L): Canopy (Minutes Sensor = Dry)
-'Public LWMDry_Standard                     'Leaf Wetness (LWS-L): Standard Mount (Minutes Sensor = Dry)
-'Public LWMWet_Canopy                       'Leaf Wetness (LWS-L): Canopy (Minutes Sensor = Wet)
-'Public LWMWet_Standard                     'Leaf Wetness (LWS-L): Standard Mount (Minutes Sensor = Wet)
+Public Battery_V                            'Logger Battery Voltage
 Public PanelTemp_C                          'Logger Wiring Panel Temperature
+'
+Public AirTemp_C                            'HMP-155a Air Temperature
+Public RelHum                               'HMP-155a Relative Humidity
+'
+Public SolRad_W                             'Solar Radiation: Flux Density
+Public SolRad_kJ                            'Solar Radiation: Total Flux
+Public SolRad_kWh                           'Solar Radiation: Total Flux
+'
+Public CS650_0(6)                           'CS655 Water Content Reflectometer / Soil Temperature (05-cm)    [SDI-12 sensor address "0"]
+Public CS650_1(6)                           'CS655 Water Content Reflectometer / Soil Temperature (10-cm)    [SDI-12 sensor address "1"]
+Public CS650_2(6)                           'CS655 Water Content Reflectometer / Soil Temperature (20-cm)    [SDI-12 sensor address "2"]
+Public CS650_3(6)                           'CS655 Water Content Reflectometer / Soil Temperature (50-cm)    [SDI-12 sensor address "3"]
+Public CS650_4(6)                           'CS655 Water Content Reflectometer / Soil Temperature (100-cm)   [SDI-12 sensor address "4"]
+'
+Public BaroVUE(3)                           'BaroVUE barometric pressure sensor (enclosure mounted)
+'
 Public Rain_mm                              'Precipitation
-Public SolRad_kJ                            'Solar Radiation: Total Flux (kJ/m2/[scan_rate])
-Public SolRad60_kJ                          'Solar Radiation: Total Flux (kJ/m2/min)
-Public StationNum                           'Station Number
+'
+Public LW_Standard_mV                       'Leaf Wetness (LWS-L): Standard Mount
+Public LW_Canopy_mV
+'
 Public WindDir_3m                           'Wind Direction: 3m
 Public WindSpd_ms_3m                        'Wind Speed: 3m
 '
 Public Main_Count                           'Test Counter for Outer Primary Loop
 Public SubScan1_Count                       'Test Counter For SubScan #1
 Public SubScan2_Count                       'Test Counter For SubScan #2
+Public SubScan3_Count                       'Test Counter For SubScan #3
+'
+Public FTPResult                            'Status of FTP file transfer
+Public PingResultGoog                       'Test Ping to www (temporary)
+Public PingResultFTP                        'Test Ping to private network
+Public MigrateNetwork As Boolean = False    'Toggle switch to hard program datalogger to new network setting  (temporary)
+Public RevertNetwork As Boolean = False     'Toggle switch to revert settings back to Campbell Cloud network (temporary) 
 '
 ' Maintenance Mode Variables - developed by S. Marquie
 '
 '   - to treat logger restarts as 'maintenance' event, set the "Table**_Enabled"
-'     boolean variables to "False" (ignore first hourly and daily entries after
-'     logger restart), otherwise set to "True" (keep associated hourly and daily
-'     entries).
-'
-'   - may want to define "Table**_Enabled" boolean variables as "Dim" to prevent
-'     from being displayed in Public table (and accidentally being toggled)
+'     boolean variables to "False", otherwise set to "True"
 '
 Public MaintMode As Boolean = False         'boolean flag used to control Maintenance Mode (T => enabled, F => disabled)
+'
 Dim    MaintCounter As Long = 0             'maintenance window counter... used to determine timeout for Maintenance Mode
 Dim    VarDisabled As Boolean = False       'boolean flag used to determine if measurement is included in output saved to Data Table
+Dim    Table05_Enabled As Boolean = True    'boolean flag used to control if Data Table "Table5" should be processed /output
+Dim    RunOnce As Boolean = False           'Boolean flag to limit the if then statements for the migration program to run once
 '
-Dim    Table05_Enabled As Boolean = True   'boolean flag used to control if Data Table "Table5" should be processed /output
-Dim    Table24_Enabled As Boolean = True   'boolean flag used to control if Data Table "Table24" should be processed / output
-Dim    Table60_Enabled As Boolean = True   'boolean flag used to control if Data Table "Table60" should be processed / output
-
-Alias BaroVUE(1)=BV_BP                      ' Barometric Pressure
-Alias BaroVUE(2)=BV_Temp                    ' Temperature correction of BP
-Alias BaroVUE(3)=BV_Qual                    ' BP Sensor Quality Assessment
-Alias CS320_1(1)=SolRad_W                   'Solar Radiation: Flux Density (W/m2)
-Alias CS320_1(2)=SolRad_Raw_mV              'Solar Radiation: Raw Sensor Data (mV)
-Alias CS320_1(3)=CS320_1_Temp               'CS320 Pyronometer Sensor Temperature
-Alias CS320_1(4)=CS320_1_X                  'CS320 Pyronometer Sensor Orientation: X-Axis
-Alias CS320_1(5)=CS320_1_Y                  'CS320 Pyronometer Sensor Orientation: Y-Axis
-Alias CS320_1(6)=CS320_1_Z                  'CS320 Pyronometer Sensor Orientation: Z-Axis
+'-----------------------------------------------------------------
+'
+Alias CurrentTime(9)=DayOfYear               'Current Day of Year
+'
 Alias CS650_0(1)=SoilMstr_5cm               'Soil Moisture (Volumetric Water Content): 5cm
 Alias CS650_0(2)=SoilEC_5cm                 'Soil Electrical Conductivity: 5cm
 Alias CS650_0(3)=SoilTemp_C_5cm             'Soil Temperature: 5cm
@@ -197,35 +159,28 @@ Alias CS650_4(3)=SoilTemp_C_100cm            'Soil Temperature: 100cm
 Alias CS650_4(4)=SoilBDP_100cm               'Soil Bulk Dielectric Permittivity: 100cm
 Alias CS650_4(5)=SoilPA_100cm                'Soil Period Average: 100cm
 Alias CS650_4(6)=SoilVR_100cm                'Soil Voltage Ratio: 100cm
-Alias CurrentTime(9)=DayOfYear               'Current Day of Year
-Alias AirTC=AirTemp_C                        'Air Temperature: 2.0m
-Alias RH=RelHum                              'Relative Humidity: 2.0m
-'Alias HV10_0(3)=DewPointTemp_C              'Dew Point Temperature: 1.5m
-'Alias HV10_0(4)=VapourPressure              'Vapour Pressure: 1.5m
+'
+Alias BaroVUE(1)=BV_BP                      ' Barometric Pressure
+Alias BaroVUE(2)=BV_Temp                    ' Temperature correction of BP
+Alias BaroVUE(3)=BV_Qual                    ' BP Sensor Quality Assessment
+'
+'-----------------------
+'
+Units Battery_V=Volts
+Units PanelTemp_C=Deg C
 '
 Units AirTemp_C=Deg C
-Units Battery_V=Volts
-Units PTemp_C=Deg C
-Units BV_BP=hPa
-Units BV_Temp=deg C
-Units BV_Qual=unitless
-'Units Battery_V=Volts
-Units CS320_1_Temp=C
-Units CS320_1_X=deg
-Units CS320_1_Y=deg
-Units CS320_1_Z=deg
-'Units DewPointTemp_C=Deg C
-'Units LW_Canopy_mV=mV
-Units LW_Standard_mV=mV
-'Units LWMCon_Canopy=Minutes
-'Units LWMCon_Standard=Minutes
-'Units LWMDry_Canopy=Minutes
-'Units LWMDry_Standard=Minutes
-'Units LWMWet_Canopy=Minutes
-'Units LWMWet_Standard=Minutes
-Units PanelTemp_C=Deg C
-Units Rain_mm=mm
 Units RelHum=%
+'
+Units SolRad_W=W/m2
+Units SolRad_kJ=kJ/m2
+Units SolRad_kWh=kWh
+'
+Units Rain_mm=mm
+'
+Units LW_Standard_mV=mV
+Units LW_Canopy_mV=mV
+'
 Units SoilBDP_5cm=unitless
 Units SoilBDP_10cm=unitless
 Units SoilBDP_20cm=unitless
@@ -256,11 +211,11 @@ Units SoilVR_10cm=unitless
 Units SoilVR_20cm=unitless
 Units SoilVR_50cm=unitless
 Units SoilVR_100cm=unitless
-Units SolRad_kJ=kJ/m2/[scan_rate]
-Units SolRad_Raw_mV=mV
-Units SolRad_W=W/m2
-Units SolRad60_kJ=kJ/m2/min
-'Units VapourPressure=kPa
+'
+Units BV_BP=hPa
+Units BV_Temp=deg C
+Units BV_Qual=unitless
+'
 Units WindDir_3m=degrees from North
 Units WindSpd_ms_3m=meters/sec
 '
@@ -272,11 +227,6 @@ Units WindSpd_ms_3m=meters/sec
 '   NOTE: include measured data only if "VarDisabled" is set to "False"
 '
 '   --- Table5 (Five Minute Data) ---
-'   Date/Time Info:        00-03
-'   Standard Station Data: 04-10
-'   Battery Voltage:       11
-'   Station Number:        12
-'   Extra Station Data:    n.a
 '
 '   00: Array ID (configured within LoggerNet Data Collection)
 '   01: Year (configured within LoggerNet Data Collection)
@@ -285,296 +235,86 @@ Units WindSpd_ms_3m=meters/sec
 '   04: Battery Voltage (average)
 '   05: Air Temperature [2.0m] (average)
 '   06: Relative Humidity [2.0m] (average)
-'   07: Solar Radiation [2.5m] (total)
-'   08: Barometric Pressure [1.5m] (average)
-'   09: Precipitation (total)
-'   10: Leaf Wetness LWS Standard (average)   
-'   11: Leaf Wetness LWS Canopy (average)
-'   12: Wind Speed [3m] (average) 
-'   13: Wind Gust [3m] (maximum)
-'   14: Wind Dir [3m] (average)
-'   15: Soil Temperature [5cm] (average)
-'   16: Soil Temperature [10cm] (average)
-'   17: Soil Temperature [20cm] (average)
-'   18: Soil Temperature [50cm] (average)
-'   19: Soil Temperature [100cm] (average)
-'   20: Soil Moisture [5cm] (average)
-'   21: Soil Moisture [10cm] (average)
-'   22: Soil Moisture [20cm] (average)
-'   23: Soil Moisture [50cm] (average)
-'   24: Soil Moisture [100cm] (average)
-'   25: Station Number
-'
-DataTable(Table5, Table05_Enabled, -1)
-  DataInterval(0, 5,Min, 10)
-  Average(1, Battery_V, FP2,False)            'changed from sample to average
-  Average(1, AirTemp_C, FP2, VarDisabled) 
-  Average(1, RelHum, FP2, VarDisabled)
-  Average(1,SolRad_W,FP2,False)
-	Average(1,SolRad_Raw_mV,FP2,False)
-	Totalize(1,SolRad_W,IEEE4,False)
- ' Average(1, DewPointTemp_C, FP2, VarDisabled)
-  Average(1, BV_BP,IEEE4, False)
-  Totalize(1, Rain_mm, FP2, VarDisabled)
-  Average(1, LW_Standard_mV, FP2, VarDisabled)
-  'Average(1, LW_Canopy_mV, FP2, VarDisabled)
-  Average(1, WindSpd_ms_3m, FP2, VarDisabled) 'need both average and maximum wind speed
-  Maximum(1, WindSpd_ms_3m, FP2, VarDisabled, True)
-	Average(1,WindDir_3m,FP2,False)             'changed from sample to average
-	Average(1,SoilMstr_5cm,FP2,False)
-	Average(1,SoilTemp_C_5cm,FP2,False)
-	'Average(1,EC,FP2,False)
-	'Average(1,P,FP2,False)
-	'Average(1,PA,FP2,False)
-	'Average(1,VR,FP2,False)
-	Average(1,SoilMstr_10cm,FP2,False)
-	Average(1,SoilTemp_C_10cm,FP2,False)
-	'Average(1,EC_2,FP2,False)
-	'Average(1,P_2,FP2,False)
-	'Average(1,PA_2,FP2,False)
-	'Average(1,VR_2,FP2,False)
-	Average(1,SoilMstr_20cm,FP2,False)
-	Average(1,SoilTemp_C_20cm,FP2,False)
-	'Average(1,EC_3,FP2,False)
-	'Average(1,P_3,FP2,False)
-	'Average(1,PA_3,FP2,False)
-	'Average(1,VR_3,FP2,False)
-	Average(1,SoilMstr_50cm,FP2,False)
-	Average(1,SoilTemp_C_50cm,FP2,False)
-	'Average(1,EC_4,FP2,False)
-	'Average(1,P_4,FP2,False)
-  'Average(1,PA_4,FP2,False)
-	'Average(1,VR_4,FP2,False)
-	Average(1,SoilMstr_100cm,FP2,False)
-	Average(1,SoilTemp_C_100cm,FP2,False)
-	'Average(1,EC_5,FP2,False)
-	'Average(1,P_5,FP2,False)
-	'Average(1,PA_5,FP2,False)
-	'Average(1,VR_5,FP2,False)
-  Sample(1,Table05_Enabled,Boolean)
-  Sample(1,Table60_Enabled,Boolean)
-  Sample(1,Table24_Enabled,Boolean)
-  Sample(1, StationNum, UINT2)
-  
-EndTable
-'
-'   --- Table60 (Hourly Data) ---
-'   Date/Time Info:        00-03
-'   Standard Station Data: 04-23
-'   Battery Voltage:       24
-'   Station Number:        25
-'   Extra Station Data:    n.a
-'
-'   00: Array ID (configured within LoggerNet Data Collection)
-'   01: Year (configured within LoggerNet Data Collection)
-'   02: Day (configured within LoggerNet Data Collection)
-'   03: Hour-Minute (configured within LoggerNet Data Collection)
-'   04: Battery Voltage (average)
-'   05: Air Temperature [2.0m] (average)
-'   06: Relative Humidity [2.0m] (average)
-'   07: Precipitation (total)
-'   08: Leaf Wetness LWS Standard (% hour wet)
-'   09: Leaf Wetness LWS Canopy (% hour wet)   
-'   10: Wind Speed [3m] (average)
-'   11: Wind Direction [3m] (average)
-'   12: Standard Deviation of Wind Direction [3m]
-'   13: Wind Speed [3m] (maximum)
-'   14: Wind Speed [3m] (time of occurrence: maximum)
-'   15: Solar Radiation [2m] (total)
-'   16: Barometric Pressure [1.5m] (average)
+'   07: Solar Radiation [2.5m] (average)
+'   08: Solar Radiation [2.5m] (total kJ)
+'   09: Solar Radiation [2.5]  (total kWh)
+'   10: Barometric Pressure [1.5m] (average)
+'   11: Precipitation (total)
+'   12: Leaf Wetness LWS Standard (average)
+'   13: Leaf Wetness LWS Canopy (average)
+'   14: Wind Speed [3m] (average)
+'   15: Wind Gust [3m] (maximum)
+'   16: Wind Dir [3m] (average)
 '   17: Soil Temperature [5cm] (average)
 '   18: Soil Temperature [10cm] (average)
 '   19: Soil Temperature [20cm] (average)
 '   20: Soil Temperature [50cm] (average)
-'   21: Soil Moisture [5cm] (average)
-'   22: Soil Moisture [10cm] (average)
-'   23: Soil Moisture [20cm] (average)
-'   24: Soil Moisture [50cm] (average)
-'   25: Soil Moisture [100cm] (average)
-'   26: Station Number
+'   21: Soil Temperature [100cm] (average)
+'   22: Soil Moisture [5cm] (average)
+'   23: Soil Moisture [10cm] (average)
+'   24: Soil Moisture [20cm] (average)
+'   25: Soil Moisture [50cm] (average)
+'   26: Soil Moisture [100cm] (average)
 '
-DataTable(Table60, Table60_Enabled, -1)
-  DataInterval(0, 60,Min, 10)
-  Average(1, Battery_V, FP2, VarDisabled)
-  Average(1, AirTemp_C, FP2, VarDisabled)
-  Average(1, RelHum, FP2, VarDisabled)
- ' Average(1, DewPointTemp_C, FP2, VarDisabled)
-  Totalize(1, Rain_mm, FP2, VarDisabled)
-  Histogram(LW_Standard_mV, FP2, VarDisabled, 1, 001, 1, LWET, 100000)
- ' Histogram(LW_Canopy_mV, FP2, VarDisabled, 1, 001, 1, LWET, 100000)
-  WindVector(1, WindSpd_ms_3m, WindDir_3m, FP2, VarDisabled, 0, 0, 0)
-  Maximum(1, WindSpd_ms_3m, FP2, VarDisabled, True)
-  Totalize(1, SolRad_kJ, IEEE4, VarDisabled)
-  Average(1,BV_BP,IEEE4,False)
-  Average(1, SoilTemp_C_5cm, FP2, VarDisabled)
-  Average(1, SoilTemp_C_10cm, FP2, VarDisabled)
-  Average(1, SoilTemp_C_20cm, FP2, VarDisabled)
-  Average(1, SoilTemp_C_50cm, FP2, VarDisabled)
-  Average(1, SoilTemp_C_100cm, FP2, VarDisabled)
-  Average(1, SoilMstr_5cm, FP2, VarDisabled)
-  Average(1, SoilMstr_10cm, FP2, VarDisabled)
-  Average(1, SoilMstr_20cm, FP2, VarDisabled)
-  Average(1, SoilMstr_50cm, FP2, VarDisabled)
-  Average(1, SoilMstr_100cm, FP2, VarDisabled)
-  Sample(1, StationNum, UINT2)
+DataTable(Table5, Table05_Enabled, -1)
+  DataInterval(0, 5,Min, 10)
+  Average(1, Battery_V, FP2,False)
+  Average(1, AirTemp_C, FP2,False)
+  Average(1, RelHum, FP2,False)
+  Average(1,SolRad_W,FP2,False)
+  Totalize(1,SolRad_kJ,FP2,False)
+  Totalize(1,SolRad_kWh,FP2,False)
+  Average(1, BV_BP,IEEE4, False)
+  Totalize(1, Rain_mm, FP2,False)
+  Average(1, LW_Standard_mV, FP2,False)
+  Average(1, LW_Canopy_mV, FP2,False)
+  Average(1, WindSpd_ms_3m, FP2,False)
+  Maximum(1, WindSpd_ms_3m, FP2,False, True)
+  Average(1,WindDir_3m,FP2,False)
+  Average(1,SoilMstr_5cm,FP2,False)
+  Average(1,SoilTemp_C_5cm,FP2,False)
+  Average(1,SoilMstr_10cm,FP2,False)
+  Average(1,SoilTemp_C_10cm,FP2,False)
+  Average(1,SoilMstr_20cm,FP2,False)
+  Average(1,SoilTemp_C_20cm,FP2,False)
+  Average(1,SoilMstr_50cm,FP2,False)
+  Average(1,SoilTemp_C_50cm,FP2,False)
+  Average(1,SoilMstr_100cm,FP2,False)
+  Average(1,SoilTemp_C_100cm,FP2,False)
+  Sample(1,Table05_Enabled,Boolean)                 'Variable used for Maintenance Mode
 EndTable
-'
-'   --- Table24 (Daily Data) ---
-'   Date/Time Info:        00-03
-'   Standard Station Data: 04-53
-'   Battery Voltage:       54-55
-'   Station Number:        56
-'   Extra Tower Data:      n.a
-'
-'   00: Array ID (configured within LoggerNet Data Collection)
-'   01: Year (configured within LoggerNet Data Collection)
-'   02: Day (configured within LoggerNet Data Collection)
-'   03: Hour-Minute (configured within LoggerNet Data Collection)
-'   04: Air Temperature [2.0m] (maximum)
-'   05: Air Temperature [2.0m] (time of occurrence: maximum)
-'   06: Air Temperature [2.0m] (minimum)
-'   07: Air Temperature [2.0m] (time of occurrence: minimum)
-'   08: Relative Humidity [2.0m] (maximum)
-'   09: Relative Humidity [2.0m] (time of occurrence: maximum)
-'   10: Relative Humidity [2.0m] (minimum)
-'   11: Relative Humidity [2.0m] (time of occurrence: minimum)
-'   12: Dew Point Temperature [1.5m] (maximum)
-'   13: Dew Point Temperature [1.5m] (time of occurrence: maximum)
-'   14: Dew Point Temperature [1.5m] (minimum)
-'   15: Dew Point Temperature [1.5m] (time of occurrence: minimum)
-'   16: Precipitation (total)
-'   17: Wind Speed [3m] (maximum)
-'   18: Wind Speed [3m] (time of occurrence: maximum)
-'   19: Solar Radiation [2m] (total)
-'   20: Solar Radiation [2m] (maximum flux)
-'   21: Solar Radiation [2m] (time of occurrence: maximum flux)
-'   22: Soil Temperature [5cm] (maximum)
-'   23: Soil Temperature [5cm] (time of occurrence: maximum)
-'   24: Soil Temperature [5cm] (minimum)
-'   25: Soil Temperature [5cm] (time of occurrence: minimum)
-'   26: Soil Temperature [10cm] (maximum)
-'   27: Soil Temperature [10cm] (time of occurrence: maximum)
-'   28: Soil Temperature [10cm] (minimum)
-'   29: Soil Temperature [10cm] (time of occurrence: minimum)
-'   30: Soil Temperature [20cm] (maximum)
-'   31: Soil Temperature [20cm] (time of occurrence: maximum)
-'   32: Soil Temperature [20cm] (minimum)
-'   33: Soil Temperature [20cm] (time of occurrence: minimum)
-'   34: Soil Temperature [50cm] (maximum)
-'   35: Soil Temperature [50cm] (time of occurrence: maximum)
-'   36: Soil Temperature [50cm] (minimum)
-'   37: Soil Temperature [50cm] (time of occurrence: minimum)
-'   38: Soil Temperature [100cm] (maximum)
-'   39: Soil Temperature [100cm] (time of occurrence: maximum)
-'   40: Soil Temperature [100cm] (minimum)
-'   41: Soil Temperature [100cm] (time of occurrence: minimum)
-'   42: Soil Moisture [5cm] (maximum)
-'   43: Soil Moisture [5cm] (time of occurrence: maximum)
-'   44: Soil Moisture [5cm] (minimum)
-'   45: Soil Moisture [5cm] (time of occurrence: minimum)
-'   46: Soil Moisture [10cm] (maximum)
-'   47: Soil Moisture [10cm] (time of occurrence: maximum)
-'   48: Soil Moisture [10cm] (minimum)
-'   49: Soil Moisture [10cm] (time of occurrence: minimum)
-'   50: Soil Moisture [20cm] (maximum)
-'   51: Soil Moisture [20cm] (time of occurrence: maximum)
-'   52: Soil Moisture [20cm] (minimum)
-'   53: Soil Moisture [20cm] (time of occurrence: minimum)
-'   54: Soil Moisture [50cm] (maximum)
-'   55: Soil Moisture [50cm] (time of occurrence: maximum)
-'   56: Soil Moisture [50cm] (minimum)
-'   57: Soil Moisture [50cm] (time of occurrence: minimum)
-'   58: Soil Moisture [100cm] (maximum)
-'   59: Soil Moisture [100cm] (time of occurrence: maximum)
-'   60: Soil Moisture [100cm] (minimum)
-'   61: Soil Moisture [100cm] (time of occurrence: minimum)
-'   62: Battery Voltage (minimum)
-'   63: Battery Voltage (time of occurrence: minimum)
-'   64: Station Number
-'
-DataTable(Table24, Table24_Enabled, -1)
-  DataInterval(0, 1440,Min, 10)
-  Maximum(1, AirTemp_C, FP2, VarDisabled, True)
-  Minimum(1, AirTemp_C, FP2, VarDisabled, True)
-  Maximum(1, RelHum, FP2, VarDisabled, True)
-  Minimum(1, RelHum, FP2, VarDisabled, True)
-  'Maximum(1, DewPointTemp_C, FP2, VarDisabled, True)
-  'Minimum(1, DewPointTemp_C, FP2, VarDisabled, True)
-  Totalize(1, Rain_mm, FP2, VarDisabled)
-  Maximum(1, WindSpd_ms_3m, FP2, VarDisabled, True)
-  Totalize(1, SolRad_kJ, IEEE4, VarDisabled)
-  Maximum(1, SolRad60_kJ, FP2, VarDisabled, True)
-  Maximum(1, SoilTemp_C_5cm, FP2, VarDisabled, True)
-  Minimum(1, SoilTemp_C_5cm, FP2, VarDisabled, True)
-  Maximum(1, SoilTemp_C_10cm, FP2, VarDisabled, True)
-  Minimum(1, SoilTemp_C_10cm, FP2, VarDisabled, True)
-  Maximum(1, SoilTemp_C_20cm, FP2, VarDisabled, True)
-  Minimum(1, SoilTemp_C_20cm, FP2, VarDisabled, True)
-  Maximum(1, SoilTemp_C_50cm, FP2, VarDisabled, True)
-  Minimum(1, SoilTemp_C_50cm, FP2, VarDisabled, True)
-  Maximum(1, SoilTemp_C_100cm, FP2, VarDisabled, True)
-  Minimum(1, SoilTemp_C_100cm, FP2, VarDisabled, True)
-  Maximum(1, SoilMstr_5cm, FP2, VarDisabled, True)
-  Minimum(1, SoilMstr_5cm, FP2, VarDisabled, True)
-  Maximum(1, SoilMstr_10cm, FP2, VarDisabled, True)
-  Minimum(1, SoilMstr_10cm, FP2, VarDisabled, True)
-  Maximum(1, SoilMstr_20cm, FP2, VarDisabled, True)
-  Minimum(1, SoilMstr_20cm, FP2, VarDisabled, True)
-  Maximum(1, SoilMstr_50cm, FP2, VarDisabled, True)
-  Minimum(1, SoilMstr_50cm, FP2, VarDisabled, True)
-  Maximum(1, SoilMstr_100cm, FP2, VarDisabled, True)
-  Minimum(1, SoilMstr_100cm, FP2, VarDisabled, True)
-  Minimum(1, Battery_V, FP2, VarDisabled, True)
-   Minimum(1,BattV,FP2,False,False)
-	Maximum(1,BV_BP,IEEE4,False,True)
-	Minimum(1,BV_BP,IEEE4,False,True)
-  Sample(1, StationNum, UINT2)
-EndTable
-'
-'------------------------------------------------------------------------------------------------------------------------------------------
-'Define Subroutines
-'Sub
-'      Enter Sub Instructions Here
-'EndSub
-'
+
 '------------------------------------------------------------------------------------------------------------------------------------------
 'Main Program
 BeginProg
-
   Main_Count = 0
   SubScan1_Count = 0
-  SubScan2_Count = 0
-
   '------------------------------------------------------------------------------------------------------------------
   'Main Scan
   '------------------------------------------------------------------------------------------------------------------
   Scan(MAIN_SCAN,Sec, 1, 0)
-
     Main_Count = Main_Count + 1
-
-    '----------------------------------------
-    '--- set Station Number
-    '----------------------------------------
-    StationNum = SNUM
-
     '----------------------------------------
     '--- determine Current Time
     '----------------------------------------
     RealTime(CurrentTime)
-
     '----------------------------------------------
     '--- determine CR6 Dataloger Battery Voltage
     '----------------------------------------------
     Battery(Battery_V)
-
     '--------------------------------------------------------
     '--- determine CR6 Datalogger Wiring Panel Temperature
     '--------------------------------------------------------
     PanelTemp(PanelTemp_C, 60)
-	'HMP155 (constant power) Temperature & Relative Humidity Sensor measurements 'AirTC' and 'RH'
-		VoltSe(AirTC,1,mV1000,U7,False,0,60,0.14,-80)
-		VoltSe(RH,1,mV1000,U8,False,0,60,0.1,0)
-		If RH>100 AND RH<108 Then RH=100
+    '
+    '
+    '--------------------------------------------------------------------------------------------
+    'HMP155 (constant power) Temperature & Relative Humidity Sensor measurements 'AirTC' and 'RH'
+    '--------------------------------------------------------------------------------------------
+    VoltSe(AirTemp_C,1,mV1000,U8,False,0,60,0.14,-80)
+    VoltSe(RelHum,1,mV1000,U7,False,0,60,0.1,0)
+    If RelHum>100 AND RelHum<108 Then RelHum=100
+    '
     '-----------------------------------------
     '--- measure Precipitation   (TE525)
     '-----------------------------------------
@@ -583,44 +323,13 @@ BeginProg
     '----------------------------------------
     '--- measure Leaf Wetness   (LWS-L)
     '----------------------------------------
-    '---   - the "minutes-wet" and "minutes-dry" not currently used, but the code
-    '---     provided by CSI will be incldued in case it is needed in the future.
-    '---   - percent hour wet is computed using Histogram in Table Output using
-    '---     cutoff value "LWET" determined by field team.
-    '---
-    '---   (1) Standard Leaf Wetness
-    '---
+    '
+    '      (1) Standard Leaf Wetness
     BrHalf(LW_Standard_mV, 1, mV5000, U2, U1, 1, 2500, False, 10000, 60, 2500, 0)
-    'LWMCon_Standard = 0
-    'LWMDry_Standard = 0
-    'LWMWet_Standard = 0
-    'If (LW_Standard_mV < 274) Then
-    '    LWMDry_Standard = MAIN_SCAN / 60.0
-    'Else
-    '    If (LW_Standard_mV >= 284 ) Then
-    '       LWMWet_Standard = MAIN_SCAN / 60.0
-    '    Else
-    '       LWMCon_Standard = MAIN_SCAN / 60.0
-    '    EndIf
-    'EndIf
-
-    '---
-         '---   (2) Canopy Leaf Wetness
-        '---
-    ' BrHalf(LW_Canopy_mV, 1, mV5000, U3, U1, 1, 2500, False, 10000, 60, 2500, 0)
-        'LWMCon_Canopy = 0
-        'LWMDry_Canopy = 0
-        'LWMWet_Canopy = 0
-        'If (LW_Canopy_mV < 274) Then
-        '    LWMDry_Canopy = MAIN_SCAN / 60.0
-        'Else
-        '    If (LW_Canopy_mV >= 284 ) Then
-        '       LWMWet_Canopy = MAIN_SCAN / 60.0
-        '    Else
-        '       LWMCon_Canopy = MAIN_SCAN / 60.0
-        '    EndIf
-        'EndIf
-
+    '
+    '---   (2) Canopy Leaf Wetness
+    BrHalf(LW_Canopy_mV, 1, mV5000, U3, U1, 1, 2500, False, 10000, 60, 2500, 0)
+    '
     '---------------------------------------
     '--- measure Wind Speed / Wind Direction
     '---------------------------------------
@@ -635,7 +344,21 @@ BeginProg
     If (WindDir_3m >= 352 OR WindDir_3m < 0) Then                               'adjust for sensor 'dead zone' (from ShortCut 4.4)
       WindDir_3m = 0
     EndIf
-
+    '
+    '----------------------------------------
+    '--- Measure Solar Radiation
+    '----------------------------------------
+    '
+    VoltDiff(SolRad_W,1,mV200,U9,True,0,60,-100,0)
+    If SolRad_W<0 Then SolRad_W=0
+    'Calculate total flux
+    'The multiplier to calculate total flux was calculated by Short Cut
+    'and based on a program execution rate (scan rate) of 5 Seconds.
+    'If you change the program execution rate outside of Short Cut with the CRBasic Editor
+    'you will need to recalculate this multiplier. See the sensor manual for more details.
+    SolRad_kJ=SolRad_W*MAIN_SCAN/1000
+    SolRad_kWh=(SolRad_W*MAIN_SCAN)/(1000*3600)
+    '
     '----------------------------------------
     '--- Modem Control
     '----------------------------------------
@@ -653,20 +376,8 @@ BeginProg
     '--------------------------------------------------------
     '--- Call Data Tables and Store/Output Data
     '--------------------------------------------------------
-
-    '---
-    '---   (1) process data tables
-    '---
-    '---       NOTE: may need to add checks to:
-    '---             (a) disable next five-minute entry after maintenance mode ends
-    '---             (b) disable next hourly entry after maintenace mode ends
-    '---             (c) disable next daily entry after maintenance mode ends
-    '---
+    '---                                                       'One-Minute Output
     CallTable Table5                                                       'Five-Minute Output
-    CallTable Table60                                                      'Hourly Output
-    CallTable Table24                                                      'Daily Output
-
-
     '---
     '---   (2) set data table processing flags (i.e. check for "maintenance mode"
     '---       - MaintMode = True  (enabled... process data tables)
@@ -674,14 +385,10 @@ BeginProg
     '---
     '---         - added checks to:
     '---             (a) disable next five-minute entry after maintenance mode ends
-    '---             (b) disable next hourly entry after maintenace mode ends
-    '---             (c) disable next daily entry after maintenance mode ends
     '---
     If (MaintMode = True) Then                                             'If "Maintenance Mode" is enabled (i.e. True)...
       MaintCounter = MaintCounter + 1                                     '...increment maintenance window counter by 1
       Table05_Enabled = False                                             '...during maintenance mode, do not process Data Table "Table5"
-      Table60_Enabled = False                                             '...during maintenance mode, do not process Data Table "Table60"
-      Table24_Enabled = False                                             '...during maintenance mode, do not process Data Table "Table24"
       VarDisabled = True                                                  '...during maintenance mode, do not include measurements in Data Table Commands
       If (MaintCounter > MMWIN / MAIN_SCAN) Then                          '...once maintenance mode threshold has been reached (maintenance window / main scan rate)...
         MaintMode = False                                                '   ...reset boolean to disable "maintenance mode" and resume processing of data tables
@@ -692,155 +399,121 @@ BeginProg
       MaintCounter = 0                                                    '...keep maintenance windows counter at 0 (until in maintenance mode)
 
       Table05_Enabled = True                                           '...wait until next 05-minute period to re-enable 05-minute data table (if needed)
-      Table60_Enabled = True                                           '...wait until next 60-minute period to re-enable hourly data table (if needed)
-      Table24_Enabled = True                                           '...wait until next 24-hour period to re-enable daily data table (if needed)
 
       VarDisabled = False
     EndIf
 
+    '-------------------------------------
+    'PING test'
+    '-------------------------------------
+    PingResultGoog = PingIP ("8.8.8.8",200)
+    PingResultFTP = PingIP (IPAddress, 200)
+
+    '--------------------------------------
+    'Set APN and change network settings on CR6
+    '--------------------------------------
+    'For a successful migration the network settings need to hard programmed
+    'into the CR6 so when the connection drops it has the information it needs to
+    'connect to the new network
+    '
+    'Added an IfThen loop to easily revert the datalogger to the old settings during
+    'the iterative testing process
+    
+    If (MigrateNetwork = True) AND (RunOnce = False) Then
+      SetSetting("PakBusTCPClients(1)","0.0.0.0,6785")
+      SetSetting("CellAPN","uwmadwis5g.vzwentp")
+      RunOnce = True
+    EndIf
+    If (RevertNetwork = True) AND (RunOnce = False) Then
+      SetSetting("PakBusTCPClients(1)","harlak.konectgds.com,8190")
+      SetSetting("CellAPN","vzwinternet")
+      RunOnce = True
+    EndIf
+
   NextScan
-
-
+  '
   '---------------------------------------------
-  '--- Slow Sequence Scan #1   (e.g. 05 seconds)
+  '--- Slow Sequence Scan #1   (e.g. 5 seconds)
   '---------------------------------------------
   '---
-  '--- NOTE: The HygroVue10 and CS320 sensors needed to be moved into this SlowSequence as they are not able to
-  '---       respond properly within the main scan if it is set to be more frequent than a 05-second interval.
-  '---
-  '---       Typically, the Solar Flux is computed as:
-  '---
-  '---             SolarRad_kJ = SolarRad_W * SCAN_RATE / 1000
-  '---
-  '---       which in this SlowSequence would be:
-  '---
-  '---             SolarRad_kJ = SolarRad_W * SUB_SCAN1 / 1000
-  '---
-  '---       However, SolarRad_kJ is "Totalized" in the primary scan, so Campbell Scientific has suggested
-  '---       using the following as long as the Total is calculated within "CallTable" from the mail scan:
-  '---
-  '---             SolarRad_kJ = SolarRad_W * MAIN_SCAN / 1000
-  '---
-  '---       Because this SlowSequence is not a multiple of the Primary Scan (5-sec vs 3-sec), there could
-  '---       be some slight error in calculating and outputing data results from within the Primary Scan,
-  '---       but Jason Ritter from Campbell Scientific suggests that the results from the HygroVue10 and
-  '----      CS320 would be negligible:
-  '---
-  '---             "There isn’t a better method than using slow sequence if you have to have some
-  '---              measurements happening at exact intervals... I don’t think you have any options
-  '---              other than SlowSequence for the slower sensors.
-  '---
-  '---              ...if you could measure SolRad_W every 3 seconds and every 5 seconds, you would
-  '---              probably see negligible difference between the individual consecutive measurements.
-  '---              So you could assume that the reading taken in the slow sequence would be close
-  '---              enough to use as a 3 second reading (MAIN_SCAN) when calculating flux. That seems
-  '---              like the easiest fix to me for the CS320.
-  '---
-  '---              The same would probably be true of the HygraVue10"
-  '---
+  '
   SlowSequence
   Scan(SUB_SCAN1, Sec, 3, 0)
-
+    '
     SubScan1_Count = SubScan1_Count + 1
-
-    '----------------------------------------------------------------------------------------------
-    '--- measure Standard Air Temp/Relative Humidity/Dew Point/Vapour Pressure   (SDI12: HygroVue10)
-    '----------------------------------------------------------------------------------------------
-  '  SDI12Recorder(HV10_0(), C1, "0", "M3!", 1, 0, -1)
-
+    '       Default CR6 Datalogger Battery Voltage measurement 'BattV'
+    Battery(Battery_V)
+    'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+    PanelTemp(PanelTemp_C ,60)
+    '
     '---------------------------------------------------------
-    '--- measure Solar Radiation and Pyranomter Heater Control
+    '--- measure Barometric Pressure
     '---------------------------------------------------------
+    '
+    'BaroVUE10 (SDI-12) Barometric Pressure Sensor measurements 'BV_BP', 'BV_Temp', and 'BV_Qual'
+    SDI12Recorder(BaroVUE(),C1,"2","M!",1,0,-1)
+    'Correct BaroVUE10 (SDI-12) Barometric Pressure Sensor 'BV_BP' measurement from station pressure to sea level pressure
+    BV_BP=BV_BP+1013.25*(1-(1-ELEV/44307.69231)^5.25328)
+    '
+
+    '
+  NextScan
+  '
+  '---------------------------------------------
+  '--- Slow Sequence Scan #2   (e.g. 60 seconds)
+  '---------------------------------------------
+  '---
+  '---
+  SlowSequence
+  Scan(SUB_SCAN2, Sec, 3, 0)
+
+    SubScan2_Count = SubScan2_Count + 1
+
+    '--------------------------------------------
+    '--- measure Soil Temperature / Soil Moisture
+    '--------------------------------------------
     '---
-    '---   (1) Solar Radiation   (SDI12: CS320 Digital Thermopile Pyranomter)
+    '---   (1) Soil Temperature / Soil Moisture: 05cm   (SDI12: CS650)
     '---
-    SDI12Recorder(CS320_1(), C1, "1", "M4!", 1, 0, -1)
-    If( SolRad_W < 0 )Then SolRad_W = 0                                    'Set negative solar radiation values to zero
-      SolRad_kJ = SolRad_W * (MAIN_SCAN / 1000)                              'Total Flux: convert W/m2 to kJ/m2 for MAIN_SCAN execution interval (frequency in which total is calculated)
-      SolRad60_kJ = SolRad_kJ * (60.0 / MAIN_SCAN)                           'Total Flux: adjust to 60-second rate (kJ/m2/min)
+    SDI12Recorder(CS650_0(), C3, "0", "M4!", 1, 0, -1)
+    '---
+    '---   (2) Soil Temperature / Soil Moisture: 10cm   (SDI12: CS650)
+    '---
+    SDI12Recorder(CS650_1(), C3, "1", "M4!", 1, 0, -1)
+    '---
+    '---   (3) Soil Temperature / Soil Moisture: 20cm   (SDI12: CS650)
+    '---
+    SDI12Recorder(CS650_2(), C3, "2", "M4!", 1, 0, -1)
+    '---
+    '---   (4) Soil Temperature / Soil Moisture: 50cm   (SDI12: CS650)
+    '---
+    SDI12Recorder(CS650_3(), C3, "3", "M4!", 1, 0, -1)
+    '---
+    '---   (5) Soil Temperature / Soil Moisture: 100cm   (SDI12: CS650)
+    '---
+    SDI12Recorder(CS650_4(), C3, "4", "M4!", 1, 0, -1)
+    '
+  NextScan
 
-      '---
-      '---      (1a) Pyranometer Heater Control
-      '---
-      CS320_1_HtrCtrl = False                                                'CS320 Heater Control Flag
-      'DewPoint(DewPointTemp_C, AirTemp_C, RelHum)                           'Calculate Dew Point... not needed if Dew Point already available
-     ' AirDewDif = CS320_1_Temp - DewPointTemp_C                              'Calculate Spread Between Sensor Temperature and Dew Point
+  SlowSequence
+  Scan(SUB_SCAN3, Sec, 3, 0)
 
-      If( CS320_1_Temp < 2 )Then CS320_1_HtrCtrl = True                      'if sensor temperature less than 2-C, turn heater ON
-       ' If( AirDewDif < 2)Then CS320_1_HtrCtrl = True                          'if sensor temperature within 2-C of dewpoint, turn heater ON
-          If( Battery_V < 11.7 )Then CS320_1_HtrCtrl = False                     'if logger battery drops below 11.7-V, turn heater OFF
+    SubScan3_Count = SubScan3_Count + 1
+    '--------------------------------------------
+    '--- Establish an FTP Connection to the NM10 Server
+    '--------------------------------------------
+    'Create file named TEST_Table5_MMDDYYY.csv every 5 minutes
+    'File format is TOA5 with timestamp & record number
+    'subsequent writes will not include header info unless the file has been
+    'deleted (12 is the file format option; 1000 indicates static file name;
+    'negating value means do not write header with each write of new data)
+    '
+    FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & Table5.TimeStamp(6,1) & ".csv",20,0,0,Min,12)
 
-            If( CS320_1_HtrCtrl = True )Then
-              SDI12Recorder(Htr, C1, "1", "XHON!", 1, 0)
-            Else
-              SDI12Recorder(Htr, C1, "1", "XHOFF!", 1, 0)
-            EndIf
+  NextScan
+  '
+  '
+EndProg
+'------------------------------------------------------------------------------- ---------------------------------------
+'
 
-'Default CR6 Datalogger Battery Voltage measurement 'BattV'
-		Battery(BattV)
-		'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
-		PanelTemp(PTemp_C,60)
-		'BaroVUE10 (SDI-12) Barometric Pressure Sensor measurements 'BV_BP', 'BV_Temp', and 'BV_Qual'
-		SDI12Recorder(BaroVUE(),C1,"2","M!",1,0,-1)
-		'Correct BaroVUE10 (SDI-12) Barometric Pressure Sensor 'BV_BP' measurement from station pressure to sea level pressure
-		BV_BP=BV_BP+1013.25*(1-(1-ELEV/44307.69231)^5.25328)
-          NextScan
-
-
-          '---------------------------------------------
-          '--- Slow Sequence Scan #2   (e.g. 60 seconds)
-          '---------------------------------------------
-          '---
-          '--- NOTE: CS650 sensors were leading to some skipped scans when all were placed in the primary scan block,
-          '---       but since there is no need to sample soil data as frequently as the other sensors, they have been
-          '---       placed into this SlowSequence block definied by "SUB_SCAN2" (e.g. 60-seconds)
-          '--- Note: M3! command changed to M4! by recommendation from CSI. The M4! command expands the threshold for soil measurements in high density soils
-          '---
-          SlowSequence
-          Scan(SUB_SCAN2, Sec, 3, 0)
-
-            SubScan2_Count = SubScan2_Count + 1
-
-            '--------------------------------------------
-            '--- measure Soil Temperature / Soil Moisture
-            '--------------------------------------------
-            '---
-            '---   (1) Soil Temperature / Soil Moisture: 05cm   (SDI12: CS650)
-            '---       - "M4!" command reports all values
-            '---       - "M3!" command includes logical tests built into OS
-            '---
-            SDI12Recorder(CS650_0(), C3, "0", "M4!", 1, 0, -1)
-
-            '---
-            '---   (2) Soil Temperature / Soil Moisture: 10cm   (SDI12: CS650)
-            '---       - "M4!" command reports all values
-            '---       - "M3!" command includes logical tests built into OS
-            '---
-            SDI12Recorder(CS650_1(), C3, "1", "M4!", 1, 0, -1)
-
-            '---
-            '---   (3) Soil Temperature / Soil Moisture: 20cm   (SDI12: CS650)
-            '---       - "M4!" command reports all values
-            '---       - "M3!" command includes logical tests built into OS
-            '---
-            SDI12Recorder(CS650_2(), C3, "2", "M4!", 1, 0, -1)
-
-            '---
-            '---   (4) Soil Temperature / Soil Moisture: 50cm   (SDI12: CS650)
-            '---       - "M4!" command reports all values
-            '---       - "M3!" command includes logical tests built into OS
-            '---
-            SDI12Recorder(CS650_3(), C3, "3", "M4!", 1, 0, -1)
-            '---
-            '---   (5) Soil Temperature / Soil Moisture: 100cm   (SDI12: CS650)
-            '---       - "M4!" command reports all values
-            '---       - "M3!" command includes logical tests built into OS
-            '---
-            SDI12Recorder(CS650_4(), C3, "4", "M4!", 1, 0, -1)
-
-          NextScan
-
-        EndProg
-        '----------------------------------------------------------------------------------------------------------------------
-        '
-        '----------------------------------------------------------------------------------------------------------------------
