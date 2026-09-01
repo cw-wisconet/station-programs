@@ -869,14 +869,14 @@ BeginProg
 
 
           'Create file named Wisc_data.csv and append data to the file
-          'File format is TOA5 with header & record number
+          'File format is TOA5 with timestamp & record number
           'The header is written to the file with the first write of the file
           'subsequent writes will not include header info unless the file has been
-          'deleted (8 is the file format option; 1000 indicates static file name;
+          'deleted (12 is the file format option; 1000 indicates static file name;
           'negating value means do not write header with each write of new data)
 
 
-          FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","",9,0,0,Sec,-1008)
+          FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & CurrentTime(1)& CurrentTime(2)& CurrentTime(3)& CurrentTime(4)& CurrentTime(5)& ".csv",2,0,5,Min,-1012)
 
 
         NextScan
@@ -884,6 +884,6 @@ BeginProg
 
 
       EndProg
-      '----------------------------------------------------------------------------------------------------------------------
+      '------------------------------------------------------------------------------- ---------------------------------------
       '
       '----------------------------------------------------------------------------------------------------------------------
