@@ -1,7 +1,7 @@
 'Program Name:     TEST-5a.cr6
 'Program Author:   Caitlin Wienkes
 'Acknowledgements: based on code provided by Steve Marquie; see previous versions for detailed notes
-'Date:             January 2024
+'Date:             January 2025
 '
 'Info:             data logger program ID code: [stid]-[1][2].[prg]: where:
 '                        [stid]...station id:         [XXXX]
@@ -9,9 +9,10 @@
 '                        [2]...LWS_canopy             [x]    (a=no, b=yes)
 '                        [prg]...suffix/logger type  [cr6]   (cr6=CR6)
 '
-''version 0.3_2024
+''version 0.4_2024
 '
-'Comments:         SDI-12 Instructions based on sample code provided by CSI (B. Banham)
+'Comments:         Use this program to transition cell modems to new network. Includes code to backfill data when cell signal fails
+'                  SDI-12 Instructions based on sample code provided by CSI (B. Banham)
 '                  Program assumes modem is powered-on continuously
 '
 '------------------------------------------------------------------------------------------------------------------------------------------
@@ -65,10 +66,10 @@ Const SUB_SCAN2 = 60                                'SUB_SCAN2: SlowSequence #2 
 Const SUB_SCAN3 = 300                               'SUB_SCAN3: SlowSequence #2 Scan Rate, in seconds (e.g. 300)... used for slower sensors; used to improve "skipped scans"
 '
 '
-''Send data through to NM10 IP address using FTPClient
+''Send data through to NM10 IP address using FTPClient. Both Username and Password are station specific.
 '
 Const IPAddress="wisconet" + CHR(45) + "agg.ad.wisc.edu"
-Const UserName="ABC"
+Const UserName="WN_ABCD"
 Const Password="123"
 '
 ''------------------------------------------------------------------------------------------------------------------------------------------
@@ -107,10 +108,10 @@ Public SubScan2_Count                       'Test Counter For SubScan #2
 Public SubScan3_Count                       'Test Counter For SubScan #3
 '
 Public FTPResult                            'Status of FTP file transfer
-Public PingResultGoog
-Public PingResultFTP
-Public MigrateNetwork As Boolean = False
-Public RevertNetwork As Boolean = False
+Public PingResultGoog                       'Test Ping to www (temporary)
+Public PingResultFTP                        'Test Ping to private network
+Public MigrateNetwork As Boolean = False    'Toggle switch to hard program datalogger to new network setting  (temporary)
+Public RevertNetwork As Boolean = False     'Toggle switch to revert settings back to Campbell Cloud network (temporary) 
 '
 ' Maintenance Mode Variables - developed by S. Marquie
 '
@@ -118,10 +119,11 @@ Public RevertNetwork As Boolean = False
 '     boolean variables to "False", otherwise set to "True"
 '
 Public MaintMode As Boolean = False         'boolean flag used to control Maintenance Mode (T => enabled, F => disabled)
+'
 Dim    MaintCounter As Long = 0             'maintenance window counter... used to determine timeout for Maintenance Mode
 Dim    VarDisabled As Boolean = False       'boolean flag used to determine if measurement is included in output saved to Data Table
-'
-Dim    Table05_Enabled As Boolean = True   'boolean flag used to control if Data Table "Table5" should be processed /output
+Dim    Table05_Enabled As Boolean = True    'boolean flag used to control if Data Table "Table5" should be processed /output
+Dim    RunOnce As Boolean = False           'Boolean flag to limit the if then statements for the migration program to run once
 '
 '-----------------------------------------------------------------
 '
@@ -400,13 +402,34 @@ BeginProg
 
       VarDisabled = False
     EndIf
-    
-    '----------------
+
+    '-------------------------------------
     'PING test'
-    '---------------------
-   PingResultGoog = PingIP ("8.8.8.8",200)
-   PingResultFTP = PingIP (IPAddress, 200)
-   
+    '-------------------------------------
+    PingResultGoog = PingIP ("8.8.8.8",200)
+    PingResultFTP = PingIP (IPAddress, 200)
+
+    '--------------------------------------
+    'Set APN and change network settings on CR6
+    '--------------------------------------
+    'For a successful migration the network settings need to hard programmed
+    'into the CR6 so when the connection drops it has the information it needs to
+    'connect to the new network
+    '
+    'Added an IfThen loop to easily revert the datalogger to the old settings during
+    'the iterative testing process
+    
+    If (MigrateNetwork = True) AND (RunOnce = False) Then
+      SetSetting("PakBusTCPClients(1)","0.0.0.0,6785")
+      SetSetting("CellAPN","uwmadwis5g.vzwentp")
+      RunOnce = True
+    EndIf
+    If (RevertNetwork = True) AND (RunOnce = False) Then
+      SetSetting("PakBusTCPClients(1)","harlak.konectgds.com,8190")
+      SetSetting("CellAPN","vzwinternet")
+      RunOnce = True
+    EndIf
+
   NextScan
   '
   '---------------------------------------------
@@ -485,17 +508,7 @@ BeginProg
     'deleted (12 is the file format option; 1000 indicates static file name;
     'negating value means do not write header with each write of new data)
     '
-    If (MigrateNetwork = True) Then 
-        SetSetting("PakBusTCPClients(1)",""",6785")  
-        SetSetting("CellAPN","uwmadwis5g.vzwentp"                                                                                      
-      EndIf
-    If (RevertNetwork = True) Then
-       SetSetting("PakBusTCPClients(1)","harlak.konectgds.com,8190")  
-       SetSetting("CellAPN","vzwinternet")                                                                                      
-      EndIf
-      
-    
-    FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & CurrentTime(1)& CurrentTime(2)& CurrentTime(3)& CurrentTime(4)& CurrentTime(5)& ".csv",20,-1,0,Min,12)
+    FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & Table5.TimeStamp(6,1) & ".csv",20,0,0,Min,12)
 
   NextScan
   '
@@ -503,4 +516,4 @@ BeginProg
 EndProg
 '------------------------------------------------------------------------------- ---------------------------------------
 '
-'----------------------------------------------------------------------------------------------------------------------
+
