@@ -67,9 +67,9 @@ Const SUB_SCAN3 = 30                               'SUB_SCAN3: SlowSequence #2 S
 '
 ''Send data through to NM10 IP address using FTPClient
 '
-Const IPAddress="wisconet-agg.doit.wisc.edu:22"
-Const UserName="WN_ALTN"
-Const Password="X5MtcgYZ_x9=uy7_"
+Const IPAddress="0.0.0.0"
+Const UserName="ABC"
+Const Password="123"
 '
 ''------------------------------------------------------------------------------------------------------------------------------------------
 'Declare Variables and Units
