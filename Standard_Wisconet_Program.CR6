@@ -4,7 +4,7 @@
 'Date:             January 2024
 '
 'Info:             data logger program ID code: [stid]-[1][2].[prg]: where:
-'                        [stid]...station id:         [XXXX] 
+'                        [stid]...station id:         [XXXX]
 '                        [1]...# of Soil sensors      [#]    (5=full suite, 4=5,10,20,50 cm, 3=5,10,20cm...)
 '                        [2]...LWS_canopy             [x]    (a=no, b=yes)
 '                        [prg]...suffix/logger type  [cr6]   (cr6=CR6)
@@ -23,8 +23,8 @@
 '  G       Red                                   G         Black
 '  AGND    Green                                C1         White  (Signal)
 '  G       Black   (Shield)                    12V         Red
-'  U7      White   (Relative Humidity Signal)    
-'  U8      Yellow  (Temperature Signal)             
+'  U7      White   (Relative Humidity Signal)
+'  U8      Yellow  (Temperature Signal)
 '  12V     Blue                                CR6        LI200R-SMV
 ' Wires not used: Pink, Brown, and Grey          U9          Black
 ' Separate G and AGND                            U10         Red
@@ -67,9 +67,9 @@ Const SUB_SCAN3 = 60                                'SUB_SCAN3: SlowSequence #3 
 '
 'Send data through to NM10 IP address using FTPClient
 '
-'Const IPAddress="0.0.0.0"
-'Const UserName="ABC"
-'Const Password="123"
+'Const IPAddress="63.233.206.9"
+'Const UserName="WISC.edu"
+'Const Password="Vaisala123"
 '
 ''------------------------------------------------------------------------------------------------------------------------------------------
 'Declare Variables and Units
@@ -295,7 +295,7 @@ DataTable(Table5, Table05_Enabled, -1)
   Average(1, RelHum, FP2,False)
   Average(1,SolRad_W,FP2,False)
   Totalize(1,SolRad_kJ,FP2,False)
-  Totalize(1,SolRad_kWh,FP2,False) 
+  Totalize(1,SolRad_kWh,FP2,False)
   Average(1, BV_BP,IEEE4, False)
   Totalize(1, Rain_mm, FP2,False)
   Average(1, LW_Standard_mV, FP2,False)
@@ -378,19 +378,19 @@ BeginProg
       WindDir_3m = 0
     EndIf
     '
-     '----------------------------------------
+    '----------------------------------------
     '--- Measure Solar Radiation
     '----------------------------------------
     '
     VoltDiff(SolRad_W,1,mV200,U9,True,0,60,-100,0)
-		If SolRad_W<0 Then SolRad_W=0
-		'Calculate total flux
-		'The multiplier to calculate total flux was calculated by Short Cut
-		'and based on a program execution rate (scan rate) of 5 Seconds.
-		'If you change the program execution rate outside of Short Cut with the CRBasic Editor
-		'you will need to recalculate this multiplier. See the sensor manual for more details.
-		SolRad_kJ=SolRad_W*MAIN_SCAN/1000
-		SolRad_kWh=(SolRad_W*MAIN_SCAN)/(1000*3600)
+    If SolRad_W<0 Then SolRad_W=0
+    'Calculate total flux
+    'The multiplier to calculate total flux was calculated by Short Cut
+    'and based on a program execution rate (scan rate) of 5 Seconds.
+    'If you change the program execution rate outside of Short Cut with the CRBasic Editor
+    'you will need to recalculate this multiplier. See the sensor manual for more details.
+    SolRad_kJ=SolRad_W*MAIN_SCAN/1000
+    SolRad_kWh=(SolRad_W*MAIN_SCAN)/(1000*3600)
     '----------------------------------------
     '--- Modem Control
     '----------------------------------------
@@ -410,8 +410,8 @@ BeginProg
     '--- Call Data Tables and Store/Output Data
     '--------------------------------------------------------
     '---
-CallTable Table1                                                       'One-Minute Output    
-CallTable Table5                                                       'Five-Minute Output
+    CallTable Table1                                                       'One-Minute Output
+    CallTable Table5                                                       'Five-Minute Output
     '---
     '---   (2) set data table processing flags (i.e. check for "maintenance mode"
     '---       - MaintMode = True  (enabled... process data tables)
@@ -444,27 +444,27 @@ CallTable Table5                                                       'Five-Min
   '---------------------------------------------
   '---
   '
-  SlowSequence
-  Scan(SUB_SCAN1, Sec, 3, 0)
-        '
-    SubScan1_Count = SubScan1_Count + 1
-    '       Default CR6 Datalogger Battery Voltage measurement 'BattV'
-    Battery(Battery_V)
-    'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
-    PanelTemp(PanelTemp_C ,60)
-        '
-     '---------------------------------------------------------
-    '--- measure Barometric Pressure
-    '---------------------------------------------------------
-    '
-    'BaroVUE10 (SDI-12) Barometric Pressure Sensor measurements 'BV_BP', 'BV_Temp', and 'BV_Qual'
-    SDI12Recorder(BaroVUE(),C3,"5","M!",1,0,-1)
-    'Correct BaroVUE10 (SDI-12) Barometric Pressure Sensor 'BV_BP' measurement from station pressure to sea level pressure
-    BV_BP=BV_BP+1013.25*(1-(1-ELEV/44307.69231)^5.25328)
-    '
-'
-  NextScan
-'
+  ' SlowSequence
+  'Scan(SUB_SCAN1, Sec, 3, 0)
+  '
+  ' SubScan1_Count = SubScan1_Count + 1
+  '       Default CR6 Datalogger Battery Voltage measurement 'BattV'
+  ' Battery(Battery_V)
+  'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+  ' PanelTemp(PanelTemp_C ,60)
+  '
+  '---------------------------------------------------------
+  '--- measure Barometric Pressure
+  '---------------------------------------------------------
+  '
+  'BaroVUE10 (SDI-12) Barometric Pressure Sensor measurements 'BV_BP', 'BV_Temp', and 'BV_Qual'
+  ' SDI12Recorder(BaroVUE(),C3,"5","M!",1,0,-1)
+  'Correct BaroVUE10 (SDI-12) Barometric Pressure Sensor 'BV_BP' measurement from station pressure to sea level pressure
+  ' BV_BP=BV_BP+1013.25*(1-(1-ELEV/44307.69231)^5.25328)
+  '
+  '
+  ' NextScan
+  '
   '---------------------------------------------
   '--- Slow Sequence Scan #2   (e.g. 60 seconds)
   '---------------------------------------------
@@ -474,6 +474,18 @@ CallTable Table5                                                       'Five-Min
   Scan(SUB_SCAN2, Sec, 3, 0)
 
     SubScan2_Count = SubScan2_Count + 1
+    Battery(Battery_V)
+    'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+    PanelTemp(PanelTemp_C ,60)
+    '
+    '---------------------------------------------------------
+    '--- measure Barometric Pressure
+    '---------------------------------------------------------
+    '
+    'BaroVUE10 (SDI-12) Barometric Pressure Sensor measurements 'BV_BP', 'BV_Temp', and 'BV_Qual'
+    SDI12Recorder(BaroVUE(),C3,"5","M!",1,0,-1)
+    'Correct BaroVUE10 (SDI-12) Barometric Pressure Sensor 'BV_BP' measurement from station pressure to sea level pressure
+    BV_BP=BV_BP+1013.25*(1-(1-ELEV/44307.69231)^5.25328)
 
     '--------------------------------------------
     '--- measure Soil Temperature / Soil Moisture
@@ -499,52 +511,53 @@ CallTable Table5                                                       'Five-Min
     '---
     SDI12Recorder(CS650_4(), C3, "4", "M4!", 1, 0, -1)
 
-    
+
   NextScan
-'
+  '
   '---------------------------------------------
   '--- Slow Sequence Scan #3   (e.g. 60 seconds)
   '---------------------------------------------
   '---
   '---
-      '--------------------------------------------
-    '--- Pluvio measurements
-    '--------------------------------------------
-    '---
-    '---
-  
- SlowSequence
- 
+  '--------------------------------------------
+  '--- Pluvio measurements
+  '--------------------------------------------
+  '---
+  '---
+
+  SlowSequence
+
   Scan(SUB_SCAN3, Sec, 3, 0)
-    
+
     SubScan3_Count = SubScan3_Count + 1
-    
+
     SDI12Recorder(Rain_Pluvio(),C1,"0","M!",1,0,-1)
-    
+
   NextScan
-  
- 'SlowSequence
+
+  'SlowSequence
   'Scan(SUB_SCAN3, Sec, 3, 0)
 
-    'SubScan3_Count = SubScan3_Count + 1
-        '--------------------------------------------
-        '--- Establish an FTP Connection to the NM10 Server
-    '--------------------------------------------
-    'Create file named TEST_Table5_MMDDYYY.csv every 5 minutes
-    'File format is TOA5 with timestamp & record number
-    'subsequent writes will not include header info unless the file has been
-    'deleted (12 is the file format option; 1000 indicates static file name;
-    'negating value means do not write header with each write of new data)
-    '
-    'FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & CurrentTime(1)& CurrentTime(2)& CurrentTime(3)& CurrentTime(4)& CurrentTime(5)& ".csv",2,0,5,Min,-1012)
-    '
-    'Result = TCPOpen ( IPAddress, 50050, 10000)
-    
-     'NextScan
-'
-'
+  'SubScan3_Count = SubScan3_Count + 1
+  '--------------------------------------------
+  '--- Establish an FTP Connection to the NM10 Server
+  '--------------------------------------------
+  'Create file named TEST_Table5_MMDDYYY.csv every 5 minutes
+  'File format is TOA5 with timestamp & record number
+  'subsequent writes will not include header info unless the file has been
+  'deleted (12 is the file format option; 1000 indicates static file name;
+  'negating value means do not write header with each write of new data)
+  '
+  'FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & CurrentTime(1)& CurrentTime(2)& CurrentTime(3)& CurrentTime(4)& CurrentTime(5)& ".csv",2,0,5,Min,-1012)
+  '
+  'Result = TCPOpen ( IPAddress, 50050, 10000)
+
+  'NextScan
+  '
+  '
 EndProg
 '------------------------------------------------------------------------------- ---------------------------------------
 '
+
 
 
