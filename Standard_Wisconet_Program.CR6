@@ -62,13 +62,14 @@ Const LWET = 280                                    'LWET:      Leaf wetness - c
 Const MAIN_SCAN = 3                                 'MAIN_SCAN: Primary Scan Rate, in seconds (e.g. 3)...    used for main program and most sensors
 Const SUB_SCAN1 = 5                                 'SUB_SCAN1: SlowSequence #1 Scan Rate, in seconds (e.g. 5)... used for slower sensors; used to improve "skipped scans"
 Const SUB_SCAN2 = 60                                'SUB_SCAN2: SlowSequence #2 Scan Rate, in seconds (e.g. 60)... used for slower sensors; used to improve "skipped scans"
+Const SUB_SCAN3 = 60                                'SUB_SCAN3: SlowSequence #3 Scan Rate, in seconds (e.g. 60)... used for slower sensors; used to improve "skipped scans"
 '
 '
 'Send data through to NM10 IP address using FTPClient
 '
-'Const IPAddress="63.233.206.9"
-'Const UserName="WISC.edu"
-'Const Password="Vaisala123"
+'Const IPAddress="0.0.0.0"
+'Const UserName="ABC"
+'Const Password="123"
 '
 ''------------------------------------------------------------------------------------------------------------------------------------------
 'Declare Variables and Units
@@ -105,6 +106,7 @@ Public Rain_Pluvio(8)                       'Outputs from Pluvio
 Public Main_Count                           'Test Counter for Outer Primary Loop
 Public SubScan1_Count                       'Test Counter For SubScan #1
 Public SubScan2_Count                       'Test Counter For SubScan #2
+Public SubScan3_Count                       'Test Counter For SubScab #3
 '
 ' Maintenance Mode Variables - developed by S. Marquie
 '
@@ -115,7 +117,7 @@ Public MaintMode As Boolean = False         'boolean flag used to control Mainte
 Dim    MaintCounter As Long = 0             'maintenance window counter... used to determine timeout for Maintenance Mode
 Dim    VarDisabled As Boolean = False       'boolean flag used to determine if measurement is included in output saved to Data Table
 '
-Public Table01_Enabled As Boolean = False   'boolean flag used to control if Data Table "Table1" should be processed /output
+Public Table01_Enabled As Boolean = True   'boolean flag used to control if Data Table "Table1" should be processed /output
 Dim    Table05_Enabled As Boolean = True   'boolean flag used to control if Data Table "Table5" should be processed /output
 '
 '-----------------------------------------------------------------
@@ -236,35 +238,7 @@ Units LoadCell_Temp=Deg C
 '   NOTE: process Data Table only in "TableLogging" is set to "True"
 '   NOTE: include measured data only if "VarDisabled" is set to "False"
 '
-'   --- Table1 (1 Minute Data for Solar Eclipse) ---
-'
-'   00: Array ID (configured within LoggerNet Data Collection)
-'   01: Year (configured within LoggerNet Data Collection)
-'   02: Day (configured within LoggerNet Data Collection)
-'   03: Hour-Minute (configured within LoggerNet Data Collection)
-'   04: Battery Voltage (average)
-'   05: Air Temperature [2.0m] (average)
-'   06: Relative Humidity [2.0m] (average)
-'   07: Solar Radiation [2.5m] (average)
-'   08: Solar Radiation [2.5m] (total kJ)
-'   09: Solar Radiation [2.5]  (total kWh)
-'   10: Barometric Pressure [1.5m] (average)
-'   11: Precipitation (total)
-'   12: Leaf Wetness LWS Standard (average)
-'   13: Leaf Wetness LWS Canopy (average)
-'   14: Wind Speed [3m] (average)
-'   15: Wind Gust [3m] (maximum)
-'   16: Wind Dir [3m] (average)
-'   17: Soil Temperature [5cm] (average)
-'   18: Soil Temperature [10cm] (average)
-'   19: Soil Temperature [20cm] (average)
-'   20: Soil Temperature [50cm] (average)
-'   21: Soil Temperature [100cm] (average)
-'   22: Soil Moisture [5cm] (average)
-'   23: Soil Moisture [10cm] (average)
-'   24: Soil Moisture [20cm] (average)
-'   25: Soil Moisture [50cm] (average)
-'   26: Soil Moisture [100cm] (average)
+'   --- Table1 (1 Minute Data for Pluvio) ---
 '
 DataTable(Table1, Table01_Enabled, -1)
   DataInterval(0,1,Min, 10)
@@ -428,6 +402,7 @@ BeginProg
       Main_Count = 0
       SubScan1_Count = 0
       SubScan2_Count = 0
+      SubScan3_Count = 0
     EndIf
 
 
@@ -483,7 +458,7 @@ CallTable Table5                                                       'Five-Min
     '---------------------------------------------------------
     '
     'BaroVUE10 (SDI-12) Barometric Pressure Sensor measurements 'BV_BP', 'BV_Temp', and 'BV_Qual'
-    SDI12Recorder(BaroVUE(),C1,"2","M!",1,0,-1)
+    SDI12Recorder(BaroVUE(),C3,"5","M!",1,0,-1)
     'Correct BaroVUE10 (SDI-12) Barometric Pressure Sensor 'BV_BP' measurement from station pressure to sea level pressure
     BV_BP=BV_BP+1013.25*(1-(1-ELEV/44307.69231)^5.25328)
     '
@@ -496,7 +471,7 @@ CallTable Table5                                                       'Five-Min
   '---
   '---
   SlowSequence
-  Scan(SUB_SCAN1, Sec, 3, 0)
+  Scan(SUB_SCAN2, Sec, 3, 0)
 
     SubScan2_Count = SubScan2_Count + 1
 
@@ -526,11 +501,25 @@ CallTable Table5                                                       'Five-Min
 
     
   NextScan
+'
+  '---------------------------------------------
+  '--- Slow Sequence Scan #3   (e.g. 60 seconds)
+  '---------------------------------------------
+  '---
+  '---
+      '--------------------------------------------
+    '--- Pluvio measurements
+    '--------------------------------------------
+    '---
+    '---
   
  SlowSequence
- SubScan2_Count = SubScan2_Count + 1
-  Scan(SUB_SCAN2, Sec, 3, 0)
-    SDI12Recorder(Rain_Pluvio(),C3,"5","M!",1,0)
+ 
+  Scan(SUB_SCAN3, Sec, 3, 0)
+    
+    SubScan3_Count = SubScan3_Count + 1
+    
+    SDI12Recorder(Rain_Pluvio(),C1,"0","M!",1,0,-1)
     
   NextScan
   
@@ -557,3 +546,4 @@ CallTable Table5                                                       'Five-Min
 EndProg
 '------------------------------------------------------------------------------- ---------------------------------------
 '
+
