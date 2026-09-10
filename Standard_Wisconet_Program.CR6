@@ -1,18 +1,17 @@
-'Program Name:     TEST-5a.cr6
+'Program Name:     HNCK-5a-Pluvio.cr6
 'Program Author:   Caitlin Wienkes
 'Acknowledgements: based on code provided by Steve Marquie; see previous versions for detailed notes
-'Date:             January 2025
+'Date:             January 2024
 '
 'Info:             data logger program ID code: [stid]-[1][2].[prg]: where:
-'                        [stid]...station id:         [XXXX]
+'                        [stid]...station id:         [XXXX] 
 '                        [1]...# of Soil sensors      [#]    (5=full suite, 4=5,10,20,50 cm, 3=5,10,20cm...)
 '                        [2]...LWS_canopy             [x]    (a=no, b=yes)
 '                        [prg]...suffix/logger type  [cr6]   (cr6=CR6)
 '
-''version 0.4_2024
+''version 0.3_2024
 '
-'Comments:         Use this program to transition cell modems to new network. Includes code to backfill data when cell signal fails
-'                  SDI-12 Instructions based on sample code provided by CSI (B. Banham)
+'Comments:         SDI-12 Instructions based on sample code provided by CSI (B. Banham)
 '                  Program assumes modem is powered-on continuously
 '
 '------------------------------------------------------------------------------------------------------------------------------------------
@@ -20,15 +19,15 @@
 '------------------------------------------------------------------------------------------------------------------------------------------
 'Wiring Diagram:
 '
-'CR6     HMP155a                               CR6        LI200R-SMV
-'  G       Red                                   U9          Black
-'  AGND    Green                                 U10         Red
-'  G       Black   (Shield)
-'  U7      Yellow  (Relative Humidity Signal)
-'  U8      White   (Temperature Signal)
-'  12V     Blue
-' Wires not used: Pink, Brown, and Grey
-' Separate G and AGND
+'CR6     HMP155a                               CR6        Pluvio
+'  G       Red                                   G         Black
+'  AGND    Green                                C1         White  (Signal)
+'  G       Black   (Shield)                    12V         Red
+'  U7      White   (Relative Humidity Signal)    
+'  U8      Yellow  (Temperature Signal)             
+'  12V     Blue                                CR6        LI200R-SMV
+' Wires not used: Pink, Brown, and Grey          U9          Black
+' Separate G and AGND                            U10         Red
 '
 'CR6      LWS_Standard                         CR6        LWS_Canoppy (Door and Kewaunee Stations)
 '  U1       Brown  (VEx)                         U1         White (VEx)
@@ -54,7 +53,7 @@
 '
 '   The following are station-specific variables:
 '
-Const ELEV = 315                                    'ELEV: Station Elevation - Used to convert station pressure to sea level pressure
+Const ELEV = 332                                    'ELEV: Station Elevation - Used to convert station pressure to sea level pressure
 '
 '   The following are program constants and should not be modified
 '
@@ -63,14 +62,13 @@ Const LWET = 280                                    'LWET:      Leaf wetness - c
 Const MAIN_SCAN = 3                                 'MAIN_SCAN: Primary Scan Rate, in seconds (e.g. 3)...    used for main program and most sensors
 Const SUB_SCAN1 = 5                                 'SUB_SCAN1: SlowSequence #1 Scan Rate, in seconds (e.g. 5)... used for slower sensors; used to improve "skipped scans"
 Const SUB_SCAN2 = 60                                'SUB_SCAN2: SlowSequence #2 Scan Rate, in seconds (e.g. 60)... used for slower sensors; used to improve "skipped scans"
-Const SUB_SCAN3 = 300                               'SUB_SCAN3: SlowSequence #2 Scan Rate, in seconds (e.g. 300)... used for slower sensors; used to improve "skipped scans"
 '
 '
-''Send data through to NM10 IP address using FTPClient. Both Username and Password are station specific.
+'Send data through to NM10 IP address using FTPClient
 '
-Const IPAddress="wisconet" + CHR(45) + "agg.ad.wisc.edu"
-Const UserName="WN_ABCD"
-Const Password="123"
+'Const IPAddress="63.233.206.9"
+'Const UserName="WISC.edu"
+'Const Password="Vaisala123"
 '
 ''------------------------------------------------------------------------------------------------------------------------------------------
 'Declare Variables and Units
@@ -102,16 +100,11 @@ Public LW_Canopy_mV
 Public WindDir_3m                           'Wind Direction: 3m
 Public WindSpd_ms_3m                        'Wind Speed: 3m
 '
+Public Rain_Pluvio(8)                       'Outputs from Pluvio
+'
 Public Main_Count                           'Test Counter for Outer Primary Loop
 Public SubScan1_Count                       'Test Counter For SubScan #1
 Public SubScan2_Count                       'Test Counter For SubScan #2
-Public SubScan3_Count                       'Test Counter For SubScan #3
-'
-Public FTPResult                            'Status of FTP file transfer
-Public PingResultGoog                       'Test Ping to www (temporary)
-Public PingResultFTP                        'Test Ping to private network
-Public MigrateNetwork As Boolean = False    'Toggle switch to hard program datalogger to new network setting  (temporary)
-Public RevertNetwork As Boolean = False     'Toggle switch to revert settings back to Campbell Cloud network (temporary) 
 '
 ' Maintenance Mode Variables - developed by S. Marquie
 '
@@ -119,11 +112,11 @@ Public RevertNetwork As Boolean = False     'Toggle switch to revert settings ba
 '     boolean variables to "False", otherwise set to "True"
 '
 Public MaintMode As Boolean = False         'boolean flag used to control Maintenance Mode (T => enabled, F => disabled)
-'
 Dim    MaintCounter As Long = 0             'maintenance window counter... used to determine timeout for Maintenance Mode
 Dim    VarDisabled As Boolean = False       'boolean flag used to determine if measurement is included in output saved to Data Table
-Dim    Table05_Enabled As Boolean = True    'boolean flag used to control if Data Table "Table5" should be processed /output
-Dim    RunOnce As Boolean = False           'Boolean flag to limit the if then statements for the migration program to run once
+'
+Public Table01_Enabled As Boolean = False   'boolean flag used to control if Data Table "Table1" should be processed /output
+Dim    Table05_Enabled As Boolean = True   'boolean flag used to control if Data Table "Table5" should be processed /output
 '
 '-----------------------------------------------------------------
 '
@@ -163,6 +156,15 @@ Alias CS650_4(6)=SoilVR_100cm                'Soil Voltage Ratio: 100cm
 Alias BaroVUE(1)=BV_BP                      ' Barometric Pressure
 Alias BaroVUE(2)=BV_Temp                    ' Temperature correction of BP
 Alias BaroVUE(3)=BV_Qual                    ' BP Sensor Quality Assessment
+'
+Alias Rain_Pluvio(1) = Intensity_RT
+Alias Rain_Pluvio(2) = Accu_NRT              'Since the last measured value sample
+Alias Rain_Pluvio(3) = AccuTotal_NRT         'Since the last reset
+Alias Rain_Pluvio(4) = Accu_RT_NRT           'Since the last measured value sample
+Alias Rain_Pluvio(5) = Bucket_RT
+Alias Rain_Pluvio(6) = Bucket_NRT
+Alias Rain_Pluvio(7) = LoadCell_Temp
+Alias Rain_Pluvio(8) = Status_Pluvio         'Since the last measured sample
 '
 '-----------------------
 '
@@ -219,7 +221,63 @@ Units BV_Qual=unitless
 Units WindDir_3m=degrees from North
 Units WindSpd_ms_3m=meters/sec
 '
+Units Intensity_RT=mm/h
+Units Accu_NRT=mm
+Units AccuTotal_NRT=mm
+Units Accu_RT_NRT=mm
+Units Bucket_RT=mm
+Units Bucket_NRT=mm
+Units LoadCell_Temp=Deg C
+'
 '------------------------------------------------------------------------------------------------------------------------------------------
+'------------------------------------------------------------------------------------------------------------------------------------------
+'Define Data Tables:   (Note: Array ID, date, and time info set within LoggerNet Settings)
+'
+'   NOTE: process Data Table only in "TableLogging" is set to "True"
+'   NOTE: include measured data only if "VarDisabled" is set to "False"
+'
+'   --- Table1 (1 Minute Data for Solar Eclipse) ---
+'
+'   00: Array ID (configured within LoggerNet Data Collection)
+'   01: Year (configured within LoggerNet Data Collection)
+'   02: Day (configured within LoggerNet Data Collection)
+'   03: Hour-Minute (configured within LoggerNet Data Collection)
+'   04: Battery Voltage (average)
+'   05: Air Temperature [2.0m] (average)
+'   06: Relative Humidity [2.0m] (average)
+'   07: Solar Radiation [2.5m] (average)
+'   08: Solar Radiation [2.5m] (total kJ)
+'   09: Solar Radiation [2.5]  (total kWh)
+'   10: Barometric Pressure [1.5m] (average)
+'   11: Precipitation (total)
+'   12: Leaf Wetness LWS Standard (average)
+'   13: Leaf Wetness LWS Canopy (average)
+'   14: Wind Speed [3m] (average)
+'   15: Wind Gust [3m] (maximum)
+'   16: Wind Dir [3m] (average)
+'   17: Soil Temperature [5cm] (average)
+'   18: Soil Temperature [10cm] (average)
+'   19: Soil Temperature [20cm] (average)
+'   20: Soil Temperature [50cm] (average)
+'   21: Soil Temperature [100cm] (average)
+'   22: Soil Moisture [5cm] (average)
+'   23: Soil Moisture [10cm] (average)
+'   24: Soil Moisture [20cm] (average)
+'   25: Soil Moisture [50cm] (average)
+'   26: Soil Moisture [100cm] (average)
+'
+DataTable(Table1, Table01_Enabled, -1)
+  DataInterval(0,1,Min, 10)
+  Totalize(1,Rain_mm, FP2, VarDisabled)
+  Sample (1,Intensity_RT,FP2,False)
+  Sample(1,AccuTotal_NRT, FP2)
+  Sample(1,Accu_NRT, FP2)
+  Sample(1,Accu_RT_NRT, FP2)
+  Sample(1,Bucket_NRT, FP2)
+  Sample(1,Bucket_RT, FP2)
+  Sample (1,LoadCell_Temp,FP2,False)
+EndTable
+
 '------------------------------------------------------------------------------------------------------------------------------------------
 'Define Data Tables:   (Note: Array ID, date, and time info set within LoggerNet Settings)
 '
@@ -263,7 +321,7 @@ DataTable(Table5, Table05_Enabled, -1)
   Average(1, RelHum, FP2,False)
   Average(1,SolRad_W,FP2,False)
   Totalize(1,SolRad_kJ,FP2,False)
-  Totalize(1,SolRad_kWh,FP2,False)
+  Totalize(1,SolRad_kWh,FP2,False) 
   Average(1, BV_BP,IEEE4, False)
   Totalize(1, Rain_mm, FP2,False)
   Average(1, LW_Standard_mV, FP2,False)
@@ -283,6 +341,7 @@ DataTable(Table5, Table05_Enabled, -1)
   Average(1,SoilTemp_C_100cm,FP2,False)
   Sample(1,Table05_Enabled,Boolean)                 'Variable used for Maintenance Mode
 EndTable
+
 
 '------------------------------------------------------------------------------------------------------------------------------------------
 'Main Program
@@ -345,20 +404,19 @@ BeginProg
       WindDir_3m = 0
     EndIf
     '
-    '----------------------------------------
+     '----------------------------------------
     '--- Measure Solar Radiation
     '----------------------------------------
     '
     VoltDiff(SolRad_W,1,mV200,U9,True,0,60,-100,0)
-    If SolRad_W<0 Then SolRad_W=0
-    'Calculate total flux
-    'The multiplier to calculate total flux was calculated by Short Cut
-    'and based on a program execution rate (scan rate) of 5 Seconds.
-    'If you change the program execution rate outside of Short Cut with the CRBasic Editor
-    'you will need to recalculate this multiplier. See the sensor manual for more details.
-    SolRad_kJ=SolRad_W*MAIN_SCAN/1000
-    SolRad_kWh=(SolRad_W*MAIN_SCAN)/(1000*3600)
-    '
+		If SolRad_W<0 Then SolRad_W=0
+		'Calculate total flux
+		'The multiplier to calculate total flux was calculated by Short Cut
+		'and based on a program execution rate (scan rate) of 5 Seconds.
+		'If you change the program execution rate outside of Short Cut with the CRBasic Editor
+		'you will need to recalculate this multiplier. See the sensor manual for more details.
+		SolRad_kJ=SolRad_W*MAIN_SCAN/1000
+		SolRad_kWh=(SolRad_W*MAIN_SCAN)/(1000*3600)
     '----------------------------------------
     '--- Modem Control
     '----------------------------------------
@@ -376,8 +434,9 @@ BeginProg
     '--------------------------------------------------------
     '--- Call Data Tables and Store/Output Data
     '--------------------------------------------------------
-    '---                                                       'One-Minute Output
-    CallTable Table5                                                       'Five-Minute Output
+    '---
+CallTable Table1                                                       'One-Minute Output    
+CallTable Table5                                                       'Five-Minute Output
     '---
     '---   (2) set data table processing flags (i.e. check for "maintenance mode"
     '---       - MaintMode = True  (enabled... process data tables)
@@ -403,33 +462,6 @@ BeginProg
       VarDisabled = False
     EndIf
 
-    '-------------------------------------
-    'PING test'
-    '-------------------------------------
-    PingResultGoog = PingIP ("8.8.8.8",200)
-    PingResultFTP = PingIP (IPAddress, 200)
-
-    '--------------------------------------
-    'Set APN and change network settings on CR6
-    '--------------------------------------
-    'For a successful migration the network settings need to hard programmed
-    'into the CR6 so when the connection drops it has the information it needs to
-    'connect to the new network
-    '
-    'Added an IfThen loop to easily revert the datalogger to the old settings during
-    'the iterative testing process
-    
-    If (MigrateNetwork = True) AND (RunOnce = False) Then
-      SetSetting("PakBusTCPClients(1)","0.0.0.0,6785")
-      SetSetting("CellAPN","uwmadwis5g.vzwentp")
-      RunOnce = True
-    EndIf
-    If (RevertNetwork = True) AND (RunOnce = False) Then
-      SetSetting("PakBusTCPClients(1)","harlak.konectgds.com,8190")
-      SetSetting("CellAPN","vzwinternet")
-      RunOnce = True
-    EndIf
-
   NextScan
   '
   '---------------------------------------------
@@ -439,14 +471,14 @@ BeginProg
   '
   SlowSequence
   Scan(SUB_SCAN1, Sec, 3, 0)
-    '
+        '
     SubScan1_Count = SubScan1_Count + 1
     '       Default CR6 Datalogger Battery Voltage measurement 'BattV'
     Battery(Battery_V)
     'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
     PanelTemp(PanelTemp_C ,60)
-    '
-    '---------------------------------------------------------
+        '
+     '---------------------------------------------------------
     '--- measure Barometric Pressure
     '---------------------------------------------------------
     '
@@ -455,17 +487,16 @@ BeginProg
     'Correct BaroVUE10 (SDI-12) Barometric Pressure Sensor 'BV_BP' measurement from station pressure to sea level pressure
     BV_BP=BV_BP+1013.25*(1-(1-ELEV/44307.69231)^5.25328)
     '
-
-    '
+'
   NextScan
-  '
+'
   '---------------------------------------------
   '--- Slow Sequence Scan #2   (e.g. 60 seconds)
   '---------------------------------------------
   '---
   '---
   SlowSequence
-  Scan(SUB_SCAN2, Sec, 3, 0)
+  Scan(SUB_SCAN1, Sec, 3, 0)
 
     SubScan2_Count = SubScan2_Count + 1
 
@@ -492,15 +523,23 @@ BeginProg
     '---   (5) Soil Temperature / Soil Moisture: 100cm   (SDI12: CS650)
     '---
     SDI12Recorder(CS650_4(), C3, "4", "M4!", 1, 0, -1)
-    '
+
+    
   NextScan
+  
+ SlowSequence
+ SubScan2_Count = SubScan2_Count + 1
+  Scan(SUB_SCAN2, Sec, 3, 0)
+    SDI12Recorder(Rain_Pluvio(),C3,"5","M!",1,0)
+    
+  NextScan
+  
+ 'SlowSequence
+  'Scan(SUB_SCAN3, Sec, 3, 0)
 
-  SlowSequence
-  Scan(SUB_SCAN3, Sec, 3, 0)
-
-    SubScan3_Count = SubScan3_Count + 1
-    '--------------------------------------------
-    '--- Establish an FTP Connection to the NM10 Server
+    'SubScan3_Count = SubScan3_Count + 1
+        '--------------------------------------------
+        '--- Establish an FTP Connection to the NM10 Server
     '--------------------------------------------
     'Create file named TEST_Table5_MMDDYYY.csv every 5 minutes
     'File format is TOA5 with timestamp & record number
@@ -508,12 +547,13 @@ BeginProg
     'deleted (12 is the file format option; 1000 indicates static file name;
     'negating value means do not write header with each write of new data)
     '
-    FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & Table5.TimeStamp(6,1) & ".csv",20,0,0,Min,12)
-
-  NextScan
-  '
-  '
+    'FTPResult = FTPClient (IPAddress,UserName,Password,"Table5","TEST_Table5_" & CurrentTime(1)& CurrentTime(2)& CurrentTime(3)& CurrentTime(4)& CurrentTime(5)& ".csv",2,0,5,Min,-1012)
+    '
+    'Result = TCPOpen ( IPAddress, 50050, 10000)
+    
+     'NextScan
+'
+'
 EndProg
 '------------------------------------------------------------------------------- ---------------------------------------
 '
-
